@@ -85,11 +85,14 @@ private:
   static void handlePointerTimeout(void *data);
 
   void resetKeyboard();
+  void resetExtendedMouseButtonMask();
 
   void handleKeyPress(int keyCode, uint32_t keySym);
   void handleKeyRelease(int keyCode);
 
   static int handleSystemEvent(void *event, void *data);
+
+  int handleExtendedMouseButtons(int event);
 
 #ifdef WIN32
   static void handleAltGrTimeout(void *data);
@@ -115,6 +118,8 @@ private:
 
   typedef std::map<int, uint32_t> DownMap;
   DownMap downKeySym;
+
+  bool mouseButtonMask[9];
 
 #ifdef WIN32
   bool altGrArmed;

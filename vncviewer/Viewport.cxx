@@ -606,15 +606,7 @@ int Viewport::handle(int event)
     if (Fl::event_button3())
       buttonMask |= 4;
 
-    #if !defined(WIN32) && !defined(__APPLE__)
-    static const XEvent* xevent = fl_xevent;
-    if (event == FL_PUSH) {
-      if (xevent->xbutton.button == 8)
-        buttonMask |= 128;
-      if (xevent->xbutton.button == 9)
-        buttonMask |= 256;
-    }
-    #endif
+    buttonMask |= handleExtendedMouseButtons(event);
 
     if (event == FL_MOUSEWHEEL) {
       wheelMask = 0;
@@ -668,6 +660,41 @@ int Viewport::handle(int event)
   }
 
   return Fl_Widget::handle(event);
+}
+
+int Viewport::handleExtendedMouseButtons(int event)
+{
+  int mask = 0;
+
+  #if !defined(WIN32) && !defined(__APPLE__)
+  switch (event) {
+    case FL_PUSH:
+    case FL_DRAG:
+      if (Fl::event_button() == 8) // Mouse forward
+        mouseButtonMask[7] = true;
+      else if (Fl::event_button() == 9) // Mouse back
+        mouseButtonMask[8] = true;
+      break;
+    case FL_RELEASE:
+      if (Fl::event_button() == 8) // Mouse forward
+          mouseButtonMask[7] = false;
+      else if (Fl::event_button() == 9) // Mouse back
+        mouseButtonMask[8] = false;
+      break;
+    case FL_MOVE:
+      resetExtendedMouseButtonMask();
+      break;
+  }
+  #endif
+
+  // Combine mouse buttons into a single mask
+  for (int i = 0; i < 9; i++) {
+    if (mouseButtonMask[i]) {
+      mask |= 1 << i;
+    }
+  }
+
+  return mask;
 }
 
 void Viewport::sendPointerEvent(const rfb::Point& pos, int buttonMask)
@@ -826,6 +853,11 @@ void Viewport::resetKeyboard()
 {
   while (!downKeySym.empty())
     handleKeyRelease(downKeySym.begin()->first);
+}
+
+void Viewport::resetExtendedMouseButtonMask()
+{
+  memset(mouseButtonMask, 0, sizeof(mouseButtonMask));
 }
 
 
