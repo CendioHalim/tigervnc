@@ -115,6 +115,8 @@ enum { ID_DISCONNECT, ID_FULLSCREEN, ID_MINIMIZE, ID_RESIZE,
 static const WORD SCAN_FAKE = 0xaa;
 #endif
 
+bool Viewport::mouseButtonMask[9] = {false};
+
 Viewport::Viewport(int w, int h, const rfb::PixelFormat& /*serverPF*/, CConn* cc_)
   : Fl_Widget(0, 0, w, h), cc(cc_), frameBuffer(NULL),
     lastPointerPos(0, 0), lastButtonMask(0),
@@ -589,6 +591,7 @@ int Viewport::handle(int event)
 
   case FL_LEAVE:
     window()->cursor(FL_CURSOR_DEFAULT);
+    resetExtendedMouseButtonMask();
     // We want a last move event to help trigger edge stuff
     handlePointerEvent(Point(Fl::event_x() - x(), Fl::event_y() - y()), 0);
     return 1;
@@ -599,14 +602,7 @@ int Viewport::handle(int event)
   case FL_MOVE:
   case FL_MOUSEWHEEL:
     buttonMask = 0;
-    if (Fl::event_button1())
-      buttonMask |= 1;
-    if (Fl::event_button2())
-      buttonMask |= 2;
-    if (Fl::event_button3())
-      buttonMask |= 4;
-
-    buttonMask |= handleExtendedMouseButtons(event);
+    buttonMask |= handleMouseButtons(event);
 
     if (event == FL_MOUSEWHEEL) {
       wheelMask = 0;
@@ -662,29 +658,67 @@ int Viewport::handle(int event)
   return Fl_Widget::handle(event);
 }
 
-int Viewport::handleExtendedMouseButtons(int event)
+int Viewport::handleMouseButtons(int event)
 {
   int mask = 0;
+  if (Fl::event_button1())
+      mask |= 1;
+    if (Fl::event_button2())
+      mask |= 2;
+    if (Fl::event_button3())
+      mask |= 4;
 
-  #if !defined(WIN32) && !defined(__APPLE__)
-  switch (event) {
-    case FL_PUSH:
-    case FL_DRAG:
-      if (Fl::event_button() == 8) // Mouse forward
-        mouseButtonMask[7] = true;
-      else if (Fl::event_button() == 9) // Mouse back
-        mouseButtonMask[8] = true;
-      break;
-    case FL_RELEASE:
-      if (Fl::event_button() == 8) // Mouse forward
-          mouseButtonMask[7] = false;
-      else if (Fl::event_button() == 9) // Mouse back
-        mouseButtonMask[8] = false;
-      break;
-    case FL_MOVE:
-      resetExtendedMouseButtonMask();
-      break;
-  }
+  // We need to keep track of the button states on linux and mac
+  // ourselves for additional mouse buttons. On Windows, we can get the
+  // button states directly instead.
+  #if !defined(WIN32) || defined(__APPLE__)
+    // FIXME: These constants should be defined in a header somewhere.
+    #ifdef __APPLE__
+      // FIXME: Don't know where these are defined on macOS.
+      const int MOUSE_FORWARD = -65256;
+      const int MOUSE_BACK =  1077084440;
+    #else
+      const int MOUSE_FORWARD = 8;
+      const int MOUSE_BACK = 9;
+    #endif
+
+    switch (event) {
+      case FL_PUSH:
+      case FL_DRAG:
+        if (Fl::event_button() == MOUSE_FORWARD)
+          mouseButtonMask[7] = true;
+        else if (Fl::event_button() == MOUSE_BACK)
+          mouseButtonMask[8] = true;
+        break;
+      case FL_RELEASE:
+        if (Fl::event_button() == MOUSE_FORWARD)
+            mouseButtonMask[7] = false;
+        else if (Fl::event_button() == MOUSE_BACK)
+          mouseButtonMask[8] = false;
+        break;
+    }
+  #elif defined(WIN32)
+    SHORT mouseForwardState = GetKeyState(VK_XBUTTON1);
+    SHORT mouseBackState = GetKeyState(VK_XBUTTON2);
+
+    mouseButtonMask[7] = mouseForwardState & 0x8000;
+    mouseButtonMask[8] = mouseBackState & 0x8000;
+
+    // FIXME: event is unused, we don't really care about it since we
+    // get the mouse button state directly. The (void) cast is
+    // just to avoid a compiler warning.
+    (void)event;
+  #endif
+
+
+  #if !defined(WIN32)
+    // Don't reset button mask if forward or back button is pressed down
+    // since we don't want to clear the button state until the button
+    // is released.
+    if (event == FL_MOVE) {
+      if (!(mouseButtonMask[7] || mouseButtonMask[8]))
+        resetExtendedMouseButtonMask();
+    }
   #endif
 
   // Combine mouse buttons into a single mask
@@ -971,6 +1005,13 @@ int Viewport::handleSystemEvent(void *event, void *data)
 
 #if defined(WIN32)
   MSG *msg = (MSG*)event;
+
+  bool extendedMouseButtonPress = msg->message == WM_XBUTTONDOWN ||
+                                  msg->message == WM_XBUTTONUP;
+  if (extendedMouseButtonPress) {
+    int fl_event = msg->message == WM_XBUTTONDOWN ? FL_PUSH : FL_RELEASE;
+    return self->handle(fl_event);
+  } else
 
   if ((msg->message == WM_MOUSEMOVE) ||
       (msg->message == WM_LBUTTONDOWN) ||
