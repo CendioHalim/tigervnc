@@ -674,9 +674,8 @@ int Viewport::handleMouseButtons(int event)
   #if !defined(WIN32) || defined(__APPLE__)
     // FIXME: These constants should be defined in a header somewhere.
     #ifdef __APPLE__
-      // FIXME: Don't know where these are defined on macOS.
-      const int MOUSE_FORWARD = -65256;
-      const int MOUSE_BACK =  1077084440;
+      const int MOUSE_FORWARD = 3;
+      const int MOUSE_BACK =  4;
     #else
       const int MOUSE_FORWARD = 8;
       const int MOUSE_BACK = 9;
@@ -1231,6 +1230,26 @@ int Viewport::handleSystemEvent(void *event, void *data)
     }
 
     return 1;
+  } else if (cocoa_is_mouse_event_type_other(event)) {
+    // on macOS, we only want to capture NSOtherMouse(Down|Up|Dragged)
+    int button;
+    int eventType;
+
+    button = cocoa_mouse_event_button(event);
+
+    // FIXME: Is this the correct way to set the state, or is this a hack?
+    Fl::e_keysym = FL_Button + button;
+
+    eventType = cocoa_mouse_event_type(event);
+
+    switch (eventType) {
+    case NSOtherMouseDown:
+      return self->handle(FL_PUSH);
+    case NSOtherMouseUp:
+      return self->handle(FL_RELEASE);
+    case NSOtherMouseDragged:
+      return self->handle(FL_DRAG);
+    }
   }
 #else
   XEvent *xevent = (XEvent*)event;

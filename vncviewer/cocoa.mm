@@ -487,6 +487,34 @@ int cocoa_event_keysym(const void *event)
   return ucs2keysym([chars characterAtIndex:0]);
 }
 
+bool cocoa_is_mouse_event_type_other(const void *event)
+{
+  NSEvent *nsevent;
+  nsevent = (NSEvent*)event;
+
+  return [nsevent type] == NSOtherMouseDown ||
+         [nsevent type] == NSOtherMouseUp ||
+         [nsevent type] == NSOtherMouseDragged;
+}
+
+int cocoa_mouse_event_type(const void *event)
+{
+  NSEvent *nsevent;
+  nsevent = (NSEvent*)event;
+
+  return [nsevent type];
+}
+
+int cocoa_mouse_event_button(const void *event)
+{
+  NSEvent *nsevent;
+  nsevent = (NSEvent*)event;
+
+  if (cocoa_is_mouse_event_type_other(event))
+    return [nsevent buttonNumber];
+  return KERN_FAILURE;
+}
+
 static int cocoa_open_hid(io_connect_t *ioc)
 {
   kern_return_t ret;

@@ -35,6 +35,12 @@ class CConn;
 class PlatformPixelBuffer;
 class Surface;
 
+// FIXME: Are we allowed to do this?
+// macOS mouse button event types
+#define NSOtherMouseDown 25
+#define NSOtherMouseUp 26
+#define NSOtherMouseDragged 27
+
 class Viewport : public Fl_Widget, public EmulateMB {
 public:
 
