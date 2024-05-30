@@ -668,57 +668,40 @@ int Viewport::handleMouseButtons(int event)
     if (Fl::event_button3())
       mask |= 4;
 
-  // We need to keep track of the button states on linux and mac
-  // ourselves for additional mouse buttons. On Windows, we can get the
-  // button states directly instead.
-  #if !defined(WIN32) || defined(__APPLE__)
-    // FIXME: These constants should be defined in a header somewhere.
-    #ifdef __APPLE__
-      const int MOUSE_FORWARD = 3;
-      const int MOUSE_BACK =  4;
-    #else
-      const int MOUSE_FORWARD = 8;
-      const int MOUSE_BACK = 9;
-    #endif
 
-    switch (event) {
-      case FL_PUSH:
-      case FL_DRAG:
-        if (Fl::event_button() == MOUSE_FORWARD)
-          mouseButtonMask[7] = true;
-        else if (Fl::event_button() == MOUSE_BACK)
-          mouseButtonMask[8] = true;
-        break;
-      case FL_RELEASE:
-        if (Fl::event_button() == MOUSE_FORWARD)
-            mouseButtonMask[7] = false;
-        else if (Fl::event_button() == MOUSE_BACK)
-          mouseButtonMask[8] = false;
-        break;
-    }
+  // We need to keep track of the button states ourselves to handle
+  // additional mouse buttons.
+  // FIXME: These constants should be defined in a header somewhere.
+  #ifdef __APPLE__
+    const int MOUSE_FORWARD = 3;
+    const int MOUSE_BACK =  4;
   #elif defined(WIN32)
-    SHORT mouseForwardState = GetKeyState(VK_XBUTTON1);
-    SHORT mouseBackState = GetKeyState(VK_XBUTTON2);
-
-    mouseButtonMask[7] = mouseForwardState & 0x8000;
-    mouseButtonMask[8] = mouseBackState & 0x8000;
-
-    // FIXME: event is unused, we don't really care about it since we
-    // get the mouse button state directly. The (void) cast is
-    // just to avoid a compiler warning.
-    (void)event;
+    const int MOUSE_FORWARD = 8;
+    const int MOUSE_BACK = 9;
+  #else
+    const int MOUSE_FORWARD = 8;
+    const int MOUSE_BACK = 9;
   #endif
 
-
-  #if !defined(WIN32)
-    // Don't reset button mask if forward or back button is pressed down
-    // since we don't want to clear the button state until the button
-    // is released.
-    if (event == FL_MOVE) {
-      if (!(mouseButtonMask[7] || mouseButtonMask[8]))
-        resetExtendedMouseButtonMask();
-    }
-  #endif
+  switch (event) {
+    case FL_PUSH:
+    case FL_DRAG:
+      if (Fl::event_button() == MOUSE_FORWARD){
+        mouseButtonMask[7] = true;
+      }
+      else if (Fl::event_button() == MOUSE_BACK) {
+        mouseButtonMask[8] = true;
+      }
+      break;
+    case FL_RELEASE:
+      if (Fl::event_button() == MOUSE_FORWARD) {
+          mouseButtonMask[7] = false;
+      }
+      else if (Fl::event_button() == MOUSE_BACK) {
+        mouseButtonMask[8] = false;
+      }
+      break;
+  }
 
   // Combine mouse buttons into a single mask
   for (int i = 0; i < 9; i++) {
@@ -1008,9 +991,35 @@ int Viewport::handleSystemEvent(void *event, void *data)
   bool extendedMouseButtonPress = msg->message == WM_XBUTTONDOWN ||
                                   msg->message == WM_XBUTTONUP;
   if (extendedMouseButtonPress) {
-    int fl_event = msg->message == WM_XBUTTONDOWN ? FL_PUSH : FL_RELEASE;
+    UINT button;
+    int fl_event;
+
+    button = GET_XBUTTON_WPARAM(msg->wParam);
+
+    // FIXME: Is this the correct way to set the state, or is this a hack?
+    // FIXME: On Windows, XBUTTON1 is 1, XBUTTON2 is 2. This conflicts
+    //        with what FLTK uses for normal mouse buttons. For now, I'm
+    //        adding and offset of 7 to match the button numbers on X11.
+    //        Not sure if it is best to define our own constant for
+    //        additional buttons, since X11 and macOS have different
+    //        button numbers that
+    //        don't conflict already.
+    Fl::e_keysym = FL_Button + button + 7;
+
+    // FIXME: FL_LEAVE will send the a 0 mask, which will trigger a release
+    // on the server side, even if the button is being held down.
+    // Keep track of buttons being held down when the pointer is
+    // outside the window
+    if (msg->message == WM_XBUTTONDOWN) {
+      SetCapture(msg->hwnd);
+      fl_event = FL_PUSH;
+    } else if (msg->message == WM_XBUTTONUP) {
+      ReleaseCapture();
+      fl_event = FL_RELEASE;
+    }
+
     return self->handle(fl_event);
-  } else
+  }
 
   if ((msg->message == WM_MOUSEMOVE) ||
       (msg->message == WM_LBUTTONDOWN) ||
