@@ -115,11 +115,10 @@ enum { ID_DISCONNECT, ID_FULLSCREEN, ID_MINIMIZE, ID_RESIZE,
 static const WORD SCAN_FAKE = 0xaa;
 #endif
 
-bool Viewport::mouseButtonMask[9] = {false};
 
 Viewport::Viewport(int w, int h, const rfb::PixelFormat& /*serverPF*/, CConn* cc_)
   : Fl_Widget(0, 0, w, h), cc(cc_), frameBuffer(NULL),
-    lastPointerPos(0, 0), lastButtonMask(0),
+    lastPointerPos(0, 0), mouseButtonMask(0), lastButtonMask(0),
 #ifdef WIN32
     altGrArmed(false),
 #endif
@@ -591,7 +590,7 @@ int Viewport::handle(int event)
 
   case FL_LEAVE:
     window()->cursor(FL_CURSOR_DEFAULT);
-    resetExtendedMouseButtonMask();
+    mouseButtonMask = 0;
     // We want a last move event to help trigger edge stuff
     handlePointerEvent(Point(Fl::event_x() - x(), Fl::event_y() - y()), 0);
     return 1;
@@ -660,13 +659,17 @@ int Viewport::handle(int event)
 
 int Viewport::handleMouseButtons(int event)
 {
-  int mask = 0;
+  // FIXME: Should we keep the state manually to be consistent, or
+  // use FLTK for the normal buttons for convenience?
+  // Reset the mouse button mask for LMB, MMB and RMB.
+  mouseButtonMask &= ~(1 | 2 | 4);
+
   if (Fl::event_button1())
-      mask |= 1;
+      mouseButtonMask |= 1;
     if (Fl::event_button2())
-      mask |= 2;
+      mouseButtonMask |= 2;
     if (Fl::event_button3())
-      mask |= 4;
+      mouseButtonMask |= 4;
 
 
   // We need to keep track of the button states ourselves to handle
@@ -686,31 +689,24 @@ int Viewport::handleMouseButtons(int event)
   switch (event) {
     case FL_PUSH:
     case FL_DRAG:
-      if (Fl::event_button() == MOUSE_FORWARD){
-        mouseButtonMask[7] = true;
+      if (Fl::event_button() == MOUSE_FORWARD) {
+        mouseButtonMask |= 1 << 7;
       }
       else if (Fl::event_button() == MOUSE_BACK) {
-        mouseButtonMask[8] = true;
+        mouseButtonMask |= 1 << 8;
       }
       break;
     case FL_RELEASE:
       if (Fl::event_button() == MOUSE_FORWARD) {
-          mouseButtonMask[7] = false;
+          mouseButtonMask &= ~(1 << 7);
       }
       else if (Fl::event_button() == MOUSE_BACK) {
-        mouseButtonMask[8] = false;
+        mouseButtonMask &= ~(1 << 8);
       }
       break;
   }
 
-  // Combine mouse buttons into a single mask
-  for (int i = 0; i < 9; i++) {
-    if (mouseButtonMask[i]) {
-      mask |= 1 << i;
-    }
-  }
-
-  return mask;
+  return mouseButtonMask;
 }
 
 void Viewport::sendPointerEvent(const rfb::Point& pos, int buttonMask)
@@ -870,12 +866,6 @@ void Viewport::resetKeyboard()
   while (!downKeySym.empty())
     handleKeyRelease(downKeySym.begin()->first);
 }
-
-void Viewport::resetExtendedMouseButtonMask()
-{
-  memset(mouseButtonMask, 0, sizeof(mouseButtonMask));
-}
-
 
 void Viewport::handleKeyPress(int keyCode, uint32_t keySym)
 {
