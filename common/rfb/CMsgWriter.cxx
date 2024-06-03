@@ -182,20 +182,31 @@ void CMsgWriter::writePointerEvent(const Point& pos, int buttonMask)
   if (p.x >= server->width()) p.x = server->width() - 1;
   if (p.y >= server->height()) p.y = server->height() - 1;
 
-  if (server->supportsExtendedMouseButtons) {
-    startMsg(msgTypePointerEventExt);
-    os->writeU16(buttonMask);
-    os->writeU16(p.x);
-    os->writeU16(p.y);
-    endMsg();
-  }
-  else {
-    startMsg(msgTypePointerEvent);
+  startMsg(msgTypePointerEvent);
+  if (server->supportsExtendedMouseButtons && buttonMask >= 1 << 7) {
+    int higherBits;
+    int lowerBits;
+    int extendedButtonMask;
+
+    // Clear the lower 7 bits, and set the 8th bit to indicate extended
+    // button event. The upper 8 bits are used to store the extended
+    // button mask and are shifted 1 bit to the left.
+    higherBits = buttonMask & ~127;
+    higherBits <<= 1;
+    higherBits |= 1 << 7;
+
+    // Keep the lower 7 bits
+    lowerBits = buttonMask & 127;
+
+    extendedButtonMask = higherBits | lowerBits;
+
+    os->writeU16(extendedButtonMask);
+  } else {
     os->writeU8(buttonMask);
+  }
     os->writeU16(p.x);
     os->writeU16(p.y);
     endMsg();
-  }
 }
 
 void CMsgWriter::writeClientCutText(const char* str)

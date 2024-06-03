@@ -99,9 +99,6 @@ bool SMsgReader::readMsg()
   case msgTypePointerEvent:
     ret = readPointerEvent();
     break;
-  case msgTypePointerEventExt:
-    ret = readPointerEventExt();
-    break;
   case msgTypeClientCutText:
     ret = readClientCutText();
     break;
@@ -275,22 +272,52 @@ bool SMsgReader::readKeyEvent()
 
 bool SMsgReader::readPointerEvent()
 {
-  if (!is->hasData(1 + 2 + 2))
-    return false;
-  int mask = is->readU8();
-  int x = is->readU16();
-  int y = is->readU16();
-  handler->pointerEvent(Point(x, y), mask);
-  return true;
-}
+  int mask;
+  int x;
+  int y;
 
-bool SMsgReader::readPointerEventExt()
-{
-  if (!is->hasData(2 + 2 + 2))
-    return false;
-  int mask = is->readU16();
-  int x = is->readU16();
-  int y = is->readU16();
+  // If we support extended mouse buttons and the 8th bit is set,
+  // we need to read 2 bytes instead of the usual 1.
+  is->setRestorePoint();
+  if (handler->client.supportExtendedMouseButtons() && is->hasData(2 + 2 + 2)) {
+    mask = is->readU16();
+
+    // If the 8th bit is not set, we only need to read 1 byte, not 2.
+    if (!(mask & 1 << 7)) {
+      is->gotoRestorePoint();
+
+    if (!(is->hasData(1 + 2 + 2)))
+      return false;
+
+    mask = is->readU8();
+    } else {
+      // If the 8th bit is set, we need to clear the 8th bit and shift
+      // the upper 8 bits one step to the right.
+      int higherBits;
+      int lowerBits;
+
+      is->clearRestorePoint();
+
+      // Clear lower 8 bits and shift right by 1
+      higherBits = mask & (65535 ^ 255);
+      higherBits >>= 1;
+
+      // Clear upper 8 bits and combine masks
+      lowerBits = mask & 127;
+
+      mask = higherBits | lowerBits;
+    }
+  } else {
+    if (!is->hasDataOrRestore(1 + 2 + 2))
+      return false;
+
+    is->clearRestorePoint();
+    mask = is->readU8();
+  }
+
+  x = is->readU16();
+  y = is->readU16();
+
   handler->pointerEvent(Point(x, y), mask);
   return true;
 }
