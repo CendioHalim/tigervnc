@@ -183,7 +183,7 @@ void CMsgWriter::writePointerEvent(const Point& pos, int buttonMask)
   if (p.y >= server->height()) p.y = server->height() - 1;
 
   startMsg(msgTypePointerEvent);
-  if (server->supportsExtendedMouseButtons && buttonMask >= 1 << 7) {
+  if (server->supportsExtendedMouseButtons) {
     int higherBits;
     int lowerBits;
     int extendedButtonMask;
