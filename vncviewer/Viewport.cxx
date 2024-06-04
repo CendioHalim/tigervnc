@@ -666,9 +666,9 @@ int Viewport::handleMouseButtons(int event)
 
   if (Fl::event_button1())
       mouseButtonMask |= 1 << 0;
-    if (Fl::event_button2())
+  if (Fl::event_button2())
       mouseButtonMask |= 1 << 1;
-    if (Fl::event_button3())
+  if (Fl::event_button3())
       mouseButtonMask |= 1 << 2;
 
 
@@ -689,20 +689,16 @@ int Viewport::handleMouseButtons(int event)
   switch (event) {
     case FL_PUSH:
     case FL_DRAG:
-      if (Fl::event_button() == MOUSE_FORWARD) {
+      if (Fl::event_button() == MOUSE_FORWARD)
         mouseButtonMask |= 1 << 7;
-      }
-      else if (Fl::event_button() == MOUSE_BACK) {
+      else if (Fl::event_button() == MOUSE_BACK)
         mouseButtonMask |= 1 << 8;
-      }
       break;
     case FL_RELEASE:
-      if (Fl::event_button() == MOUSE_FORWARD) {
+      if (Fl::event_button() == MOUSE_FORWARD)
           mouseButtonMask &= ~(1 << 7);
-      }
-      else if (Fl::event_button() == MOUSE_BACK) {
+      else if (Fl::event_button() == MOUSE_BACK)
         mouseButtonMask &= ~(1 << 8);
-      }
       break;
   }
 
