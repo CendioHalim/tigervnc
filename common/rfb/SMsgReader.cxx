@@ -276,10 +276,19 @@ bool SMsgReader::readPointerEvent()
   int x;
   int y;
 
+  if (!(is->hasData(1 + 2 + 2)))
+    return false;
+
   // If we support extended mouse buttons and the 8th bit is set,
   // we need to read 2 bytes instead of the usual 1.
   is->setRestorePoint();
-  if (handler->client.supportExtendedMouseButtons() && is->hasData(2 + 2 + 2)) {
+  if (handler->client.supportExtendedMouseButtons()) {
+
+    if (!(is->hasData(2 + 2 + 2))) {
+      is->clearRestorePoint();
+      return false;
+    }
+
     mask = is->readU16();
 
     // If the 8th bit is not set, we only need to read 1 byte, not 2.
@@ -308,10 +317,10 @@ bool SMsgReader::readPointerEvent()
       mask = higherBits | lowerBits;
     }
   } else {
-    if (!is->hasDataOrRestore(1 + 2 + 2))
+    is->clearRestorePoint();
+    if (!is->hasData(1 + 2 + 2))
       return false;
 
-    is->clearRestorePoint();
     mask = is->readU8();
   }
 
