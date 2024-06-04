@@ -606,13 +606,13 @@ int Viewport::handle(int event)
     if (event == FL_MOUSEWHEEL) {
       wheelMask = 0;
       if (Fl::event_dy() < 0)
-        wheelMask |= 8;
+        wheelMask |= 1 << 3;
       if (Fl::event_dy() > 0)
-        wheelMask |= 16;
+        wheelMask |= 1 << 4;
       if (Fl::event_dx() < 0)
-        wheelMask |= 32;
+        wheelMask |= 1 << 5;
       if (Fl::event_dx() > 0)
-        wheelMask |= 64;
+        wheelMask |= 1 << 6;
 
       // A quick press of the wheel "button", followed by a immediate
       // release below
@@ -662,14 +662,14 @@ int Viewport::handleMouseButtons(int event)
   // FIXME: Should we keep the state manually to be consistent, or
   // use FLTK for the normal buttons for convenience?
   // Reset the mouse button mask for LMB, MMB and RMB.
-  mouseButtonMask &= ~(1 | 2 | 4);
+  mouseButtonMask &= ~(0x7);
 
   if (Fl::event_button1())
-      mouseButtonMask |= 1;
+      mouseButtonMask |= 1 << 0;
     if (Fl::event_button2())
-      mouseButtonMask |= 2;
+      mouseButtonMask |= 1 << 1;
     if (Fl::event_button3())
-      mouseButtonMask |= 4;
+      mouseButtonMask |= 1 << 2;
 
 
   // We need to keep track of the button states ourselves to handle

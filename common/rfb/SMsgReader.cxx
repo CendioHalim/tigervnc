@@ -299,11 +299,11 @@ bool SMsgReader::readPointerEvent()
       is->clearRestorePoint();
 
       // Clear lower 8 bits and shift right by 1
-      higherBits = mask & (65535 ^ 255);
+      higherBits = mask & (0xffff ^ 0xff);
       higherBits >>= 1;
 
       // Clear upper 8 bits and combine masks
-      lowerBits = mask & 127;
+      lowerBits = mask & 0x7f;
 
       mask = higherBits | lowerBits;
     }

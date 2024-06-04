@@ -191,12 +191,12 @@ void CMsgWriter::writePointerEvent(const Point& pos, int buttonMask)
     // Clear the lower 7 bits, and set the 8th bit to indicate extended
     // button event. The upper 8 bits are used to store the extended
     // button mask and are shifted 1 bit to the left.
-    higherBits = buttonMask & ~127;
+    higherBits = buttonMask & ~0x7f;
     higherBits <<= 1;
     higherBits |= 1 << 7;
 
     // Keep the lower 7 bits
-    lowerBits = buttonMask & 127;
+    lowerBits = buttonMask & 0x7f;
 
     extendedButtonMask = higherBits | lowerBits;
 
