@@ -1,6 +1,6 @@
 /* Copyright (c) 1993  X Consortium
    Copyright (C) 2002-2005 RealVNC Ltd.  All Rights Reserved.
-   Copyright 2009-2015 Pierre Ossman for Cendio AB
+   Copyright 2009-2024 Pierre Ossman for Cendio AB
 
 Permission is hereby granted, free of charge, to any person obtaining
 a copy of this software and associated documentation files (the
@@ -36,6 +36,8 @@ from the X Consortium.
 #include "RFBGlue.h"
 #include "XorgGlue.h"
 #include "RandrGlue.h"
+#include "vncDRI3.h"
+#include "vncPresent.h"
 #include "xorg-version.h"
 
 #include <stdio.h>
@@ -66,11 +68,9 @@ from the X Consortium.
 #include <X11/keysym.h>
 extern char buildtime[];
 
-#undef VENDOR_RELEASE
-#undef VENDOR_STRING
 #include "version-config.h"
 
-#define XVNCVERSION "TigerVNC 1.13.80"
+#define XVNCVERSION "TigerVNC 1.14.80"
 #define XVNCCOPYRIGHT ("Copyright (C) 1999-2024 TigerVNC Team and many others (see README.rst)\n" \
                        "See https://www.tigervnc.org for information on TigerVNC.\n")
 
@@ -223,6 +223,9 @@ ddxUseMsg(void)
     ErrorF("-inetd                 has been launched from inetd\n");
     ErrorF
         ("-noclipboard           disable clipboard settings modification via vncconfig utility\n");
+#ifdef DRI3
+    ErrorF("-rendernode PATH       DRM render node to use for DRI3\n");
+#endif
     ErrorF("-verbose [n]           verbose startup messages\n");
     ErrorF("-quiet                 minimal startup messages\n");
     ErrorF("-version               show the server version\n");
@@ -404,6 +407,15 @@ ddxProcessArgument(int argc, char *argv[], int i)
         vncNoClipboard = 1;
         return 1;
     }
+
+#ifdef DRI3
+    if (strcmp(argv[i], "-rendernode") == 0) {
+        CHECK_FOR_REQUIRED_ARGUMENTS(1);
+        ++i;
+        renderNode = argv[i];
+        return 2;
+    }
+#endif
 
     if (!strcmp(argv[i], "-verbose")) {
         if (++i < argc && argv[i]) {
@@ -670,14 +682,14 @@ vncRandRScreenSetSize(ScreenPtr pScreen,
             ret = vncRandRCrtcSet(pScreen, crtc, NULL,
                                   crtc->x, crtc->y, crtc->rotation, 0, NULL);
             if (!ret)
-                ErrorF("Warning: Unable to disable CRTC that is outside of new screen dimensions");
+                ErrorF("Warning: Unable to disable CRTC that is outside of new screen dimensions\n");
             continue;
         }
 
         /* Just needs to be resized to a temporary mode */
         mode = vncRandRModeGet(width - crtc->x, height - crtc->y);
         if (mode == NULL) {
-            ErrorF("Warning: Unable to create custom mode for %dx%d",
+            ErrorF("Warning: Unable to create custom mode for %dx%d\n",
                    width - crtc->x, height - crtc->y);
             continue;
         }
@@ -687,7 +699,7 @@ vncRandRScreenSetSize(ScreenPtr pScreen,
                               crtc->numOutputs, crtc->outputs);
         RRModeDestroy(mode);
         if (!ret)
-            ErrorF("Warning: Unable to crop CRTC to new screen dimensions");
+            ErrorF("Warning: Unable to crop CRTC to new screen dimensions\n");
     }
 
     return TRUE;
@@ -1085,6 +1097,16 @@ vncScreenInit(ScreenPtr pScreen, int argc, char **argv)
     if (!ret)
         return FALSE;
 
+    ret = vncPresentInit(pScreen);
+    if (!ret)
+        ErrorF("Failed to initialize Present extension\n");
+
+#ifdef DRI3
+    ret = vncDRI3Init(pScreen);
+    if (!ret)
+        ErrorF("Failed to initialize DRI3 extension\n");
+#endif
+
     return TRUE;
 
 }                               /* end vncScreenInit */
@@ -1103,14 +1125,17 @@ vncClientStateChange(CallbackListPtr *a, void *b, void *c)
 #ifdef GLXEXT
 #if XORG_OLDER_THAN(1, 20, 0)
 extern void GlxExtensionInit(void);
+#endif
+#endif
 
-static ExtensionModule glxExt = {
-    GlxExtensionInit,
-    "GLX",
-    &noGlxExtension
+static const ExtensionModule vncExtensions[] = {
+    {vncExtensionInit, "TIGERVNC", NULL},
+#ifdef GLXEXT
+#if XORG_OLDER_THAN(1, 20, 0)
+    { GlxExtensionInit, "GLX", &noGlxExtension },
+#endif
+#endif
 };
-#endif
-#endif
 
 void
 InitOutput(ScreenInfo * scrInfo, int argc, char **argv)
@@ -1120,15 +1145,11 @@ InitOutput(ScreenInfo * scrInfo, int argc, char **argv)
 
     vncPrintBanner();
 
+    if (serverGeneration == 1)
+        LoadExtensionList(vncExtensions, ARRAY_SIZE(vncExtensions), TRUE);
+
 #if XORG_AT_LEAST(1, 20, 0)
     xorgGlxCreateVendor();
-#else
-
-#ifdef GLXEXT
-    if (serverGeneration == 1)
-        LoadExtensionList(&glxExt, 1, TRUE);
-#endif
-
 #endif
 
     /* initialize pixmap formats */

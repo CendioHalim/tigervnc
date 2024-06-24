@@ -1,5 +1,5 @@
 /* Copyright (C) 2002-2005 RealVNC Ltd.  All Rights Reserved.
- * Copyright 2009-2019 Pierre Ossman for Cendio AB
+ * Copyright 2009-2024 Pierre Ossman for Cendio AB
  * Copyright 2014 Brian P. Hinz
  * 
  * This is free software; you can redistribute it and/or modify
@@ -54,6 +54,7 @@
 
 extern "C" {
 void vncSetGlueContext(int screenIndex);
+void vncPresentMscEvent(uint64_t id, uint64_t msc);
 }
 
 using namespace rfb;
@@ -145,15 +146,26 @@ void XserverDesktop::refreshScreenLayout()
   server->setScreenLayout(::computeScreenLayout(&outputIdMap));
 }
 
-void XserverDesktop::start(rfb::VNCServer* vs)
+uint64_t XserverDesktop::getMsc()
+{
+  return server->getMsc();
+}
+
+void XserverDesktop::queueMsc(uint64_t id, uint64_t msc)
+{
+  pendingMsc[id] = msc;
+  server->queueMsc(msc);
+}
+
+void XserverDesktop::abortMsc(uint64_t id)
+{
+  pendingMsc.erase(id);
+}
+
+void XserverDesktop::init(rfb::VNCServer* vs)
 {
   // We already own the server object, and we always keep it in a
   // ready state
-  assert(vs == server);
-}
-
-void XserverDesktop::stop()
-{
 }
 
 void XserverDesktop::queryConnection(network::Socket* sock,
@@ -311,7 +323,7 @@ void XserverDesktop::handleSocketEvent(int fd, bool read, bool write)
 
 bool XserverDesktop::handleListenerEvent(int fd,
                                          std::list<SocketListener*>* sockets,
-                                         SocketServer* sockserv)
+                                         VNCServer* sockserv)
 {
   std::list<SocketListener*>::iterator i;
 
@@ -332,7 +344,7 @@ bool XserverDesktop::handleListenerEvent(int fd,
 }
 
 bool XserverDesktop::handleSocketEvent(int fd,
-                                       SocketServer* sockserv,
+                                       VNCServer* sockserv,
                                        bool read, bool write)
 {
   std::list<Socket*> sockets;
@@ -395,17 +407,17 @@ void XserverDesktop::blockHandler(int* timeout)
 
     // Trigger timers and check when the next will expire
     int nextTimeout = Timer::checkTimeouts();
-    if (nextTimeout > 0 && (*timeout == -1 || nextTimeout < *timeout))
+    if (nextTimeout >= 0 && (*timeout == -1 || nextTimeout < *timeout))
       *timeout = nextTimeout;
   } catch (rdr::Exception& e) {
     vlog.error("XserverDesktop::blockHandler: %s",e.str());
   }
 }
 
-void XserverDesktop::addClient(Socket* sock, bool reverse)
+void XserverDesktop::addClient(Socket* sock, bool reverse, bool viewOnly)
 {
   vlog.debug("new client, sock %d reverse %d",sock->getFd(),reverse);
-  server->addSocket(sock, reverse);
+  server->addSocket(sock, reverse, viewOnly ? AccessView : AccessDefault);
   vncSetNotifyFd(sock->getFd(), screenIndex, true, false);
 }
 
@@ -476,6 +488,22 @@ unsigned int XserverDesktop::setScreenLayout(int fb_width, int fb_height,
   return result;
 }
 
+void XserverDesktop::frameTick(uint64_t msc)
+{
+  std::map<uint64_t, uint64_t>::iterator iter, next;
+
+  for (iter = pendingMsc.begin(); iter != pendingMsc.end();) {
+    next = iter; next++;
+
+    if (iter->second <= msc) {
+      pendingMsc.erase(iter->first);
+      vncPresentMscEvent(iter->first, msc);
+    }
+
+    iter = next;
+  }
+}
+
 void XserverDesktop::handleClipboardRequest()
 {
   vncHandleClipboardRequest();
@@ -518,13 +546,11 @@ void XserverDesktop::keyEvent(uint32_t keysym, uint32_t keycode, bool down)
   vncKeyboardEvent(keysym, keycode, down);
 }
 
-bool XserverDesktop::handleTimeout(Timer* t)
+void XserverDesktop::handleTimeout(Timer* t)
 {
   if (t == &queryConnectTimer) {
     server->approveConnection(queryConnectSocket, false,
                               "The attempt to prompt the user to "
                               "accept the connection failed");
   }
-
-  return false;
 }

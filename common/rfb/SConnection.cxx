@@ -43,24 +43,12 @@ using namespace rfb;
 
 static LogWriter vlog("SConnection");
 
-// AccessRights values
-const SConnection::AccessRights SConnection::AccessView           = 0x0001;
-const SConnection::AccessRights SConnection::AccessKeyEvents      = 0x0002;
-const SConnection::AccessRights SConnection::AccessPtrEvents      = 0x0004;
-const SConnection::AccessRights SConnection::AccessCutText        = 0x0008;
-const SConnection::AccessRights SConnection::AccessSetDesktopSize = 0x0010;
-const SConnection::AccessRights SConnection::AccessNonShared      = 0x0020;
-const SConnection::AccessRights SConnection::AccessDefault        = 0x03ff;
-const SConnection::AccessRights SConnection::AccessNoQuery        = 0x0400;
-const SConnection::AccessRights SConnection::AccessFull           = 0xffff;
-
-
-SConnection::SConnection()
+SConnection::SConnection(AccessRights accessRights)
   : readyForSetColourMapEntries(false),
     is(0), os(0), reader_(0), writer_(0), ssecurity(0),
     authFailureTimer(this, &SConnection::handleAuthFailureTimeout),
     state_(RFBSTATE_UNINITIALISED), preferredEncoding(encodingRaw),
-    accessRights(0x0000), hasRemoteClipboard(false),
+    accessRights(accessRights), hasRemoteClipboard(false),
     hasLocalClipboard(false),
     unsolicitedClipboardAttempt(false)
 {
@@ -254,7 +242,7 @@ bool SConnection::processSecurityMsg()
   }
 
   state_ = RFBSTATE_QUERYING;
-  setAccessRights(ssecurity->getAccessRights());
+  setAccessRights(accessRights & ssecurity->getAccessRights());
   queryConnection(ssecurity->getUserName());
 
   // If the connection got approved right away then we can continue
@@ -287,11 +275,11 @@ bool SConnection::processInitMsg()
   return reader_->readClientInit();
 }
 
-bool SConnection::handleAuthFailureTimeout(Timer* /*t*/)
+void SConnection::handleAuthFailureTimeout(Timer* /*t*/)
 {
   if (state_ != RFBSTATE_SECURITY_FAILURE) {
     close("SConnection::handleAuthFailureTimeout: invalid state");
-    return false;
+    return;
   }
 
   try {
@@ -304,12 +292,10 @@ bool SConnection::handleAuthFailureTimeout(Timer* /*t*/)
     os->flush();
   } catch (rdr::Exception& e) {
     close(e.str());
-    return false;
+    return;
   }
 
   close(authFailureMsg.c_str());
-
-  return false;
 }
 
 void SConnection::throwConnFailedException(const char* format, ...)

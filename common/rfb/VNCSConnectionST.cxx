@@ -51,8 +51,9 @@ static LogWriter vlog("VNCSConnST");
 static Cursor emptyCursor(0, 0, Point(0, 0), NULL);
 
 VNCSConnectionST::VNCSConnectionST(VNCServerST* server_, network::Socket *s,
-                                   bool reverse)
-  : sock(s), reverseConnection(reverse),
+                                   bool reverse, AccessRights ar)
+  : SConnection(ar),
+    sock(s), reverseConnection(reverse),
     inProcessMessages(false),
     pendingSyncFence(false), syncFence(false), fenceFlags(0),
     fenceDataLen(0), fenceData(NULL), congestionTimer(this),
@@ -799,7 +800,7 @@ void VNCSConnectionST::supportsLEDState()
   writer()->writeLEDState();
 }
 
-bool VNCSConnectionST::handleTimeout(Timer* t)
+void VNCSConnectionST::handleTimeout(Timer* t)
 {
   try {
     if ((t == &congestionTimer) ||
@@ -811,8 +812,6 @@ bool VNCSConnectionST::handleTimeout(Timer* t)
 
   if (t == &idleTimer)
     close("Idle timeout");
-
-  return false;
 }
 
 bool VNCSConnectionST::isShiftPressed()

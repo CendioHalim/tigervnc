@@ -8,7 +8,7 @@ set -x
 CURDIR=$(dirname $(readlink -f $0))
 TOPDIR=$(git rev-parse --show-toplevel 2>/dev/null)
 
-DEBDIR=${TOPDIR}/contrib/packages/deb/ubuntu-bionic
+DEBDIR=${TOPDIR}/contrib/packages/deb/ubuntu-noble
 
 VERSION=$(grep '^set(VERSION ' ${TOPDIR}/CMakeLists.txt | sed 's@^set(VERSION \(.*\))@\1@')
 

@@ -1,5 +1,5 @@
 /* Copyright (C) 2002-2005 RealVNC Ltd.  All Rights Reserved.
- * Copyright 2011-2019 Pierre Ossman for Cendio AB
+ * Copyright 2011-2024 Pierre Ossman for Cendio AB
  * 
  * This is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -57,7 +57,7 @@ void vncRequestClipboard(void);
 void vncAnnounceClipboard(int available);
 void vncSendClipboardData(const char* data);
 
-int vncConnectClient(const char *addr);
+int vncConnectClient(const char *addr, int viewOnly);
 
 void vncGetQueryConnect(uint32_t *opaqueId, const char**username,
                         const char **address, int *timeout);
@@ -86,6 +86,10 @@ void vncSetCursorPos(int scrIdx, int x, int y);
 void vncPreScreenResize(int scrIdx);
 void vncPostScreenResize(int scrIdx, int success, int width, int height);
 void vncRefreshScreenLayout(int scrIdx);
+
+uint64_t vncGetMsc(int scrIdx);
+void vncQueueMsc(int scrIdx, uint64_t id, uint64_t msc);
+void vncAbortMsc(int scrIdx, uint64_t id);
 
 int vncOverrideParam(const char *nameAndValue);
 

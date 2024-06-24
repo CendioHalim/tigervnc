@@ -51,12 +51,13 @@ namespace rfb {
     virtual ~VNCServerST();
 
 
-    // Methods overridden from SocketServer
+    // Methods overridden from VNCServer
 
     // addSocket
     //   Causes the server to allocate an RFB-protocol management
     //   structure for the socket & initialise it.
-    virtual void addSocket(network::Socket* sock, bool outgoing=false);
+    virtual void addSocket(network::Socket* sock, bool outgoing=false,
+                           AccessRights ar=AccessDefault);
 
     // removeSocket
     //   Clean up any resources associated with the Socket
@@ -76,11 +77,10 @@ namespace rfb {
     //   Flush pending data from the Socket on to the network.
     virtual void processSocketWriteEvent(network::Socket* sock);
 
-
-    // Methods overridden from VNCServer
-
     virtual void blockUpdates();
     virtual void unblockUpdates();
+    virtual uint64_t getMsc();
+    virtual void queueMsc(uint64_t target);
     virtual void setPixelBuffer(PixelBuffer* pb, const ScreenSet& layout);
     virtual void setPixelBuffer(PixelBuffer* pb);
     virtual void setScreenLayout(const ScreenSet& layout);
@@ -155,7 +155,7 @@ namespace rfb {
   protected:
 
     // Timer callbacks
-    virtual bool handleTimeout(Timer* t);
+    virtual void handleTimeout(Timer* t);
 
     // - Internal methods
 
@@ -206,6 +206,7 @@ namespace rfb {
     Timer disconnectTimer;
     Timer connectTimer;
 
+    uint64_t msc, queuedMsc;
     Timer frameTimer;
   };
 

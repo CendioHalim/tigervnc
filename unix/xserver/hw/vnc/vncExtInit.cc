@@ -1,5 +1,5 @@
 /* Copyright (C) 2002-2005 RealVNC Ltd.  All Rights Reserved.
- * Copyright 2011-2019 Pierre Ossman for Cendio AB
+ * Copyright 2011-2024 Pierre Ossman for Cendio AB
  * 
  * This is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -267,7 +267,7 @@ void vncExtensionInit(void)
 
         if (scr == 0 && vncInetdSock != -1 && listeners.empty()) {
           network::Socket* sock = new network::TcpSocket(vncInetdSock);
-          desktop[scr]->addClient(sock, false);
+          desktop[scr]->addClient(sock, false, false);
           vlog.info("added inetd sock");
         }
       }
@@ -343,7 +343,7 @@ void vncSendClipboardData(const char* data)
     desktop[scr]->sendClipboardData(data);
 }
 
-int vncConnectClient(const char *addr)
+int vncConnectClient(const char *addr, int viewOnly)
 {
   if (strlen(addr) == 0) {
     try {
@@ -362,7 +362,9 @@ int vncConnectClient(const char *addr)
 
   try {
     network::Socket* sock = new network::TcpSocket(host.c_str(), port);
-    desktop[0]->addClient(sock, true);
+    vlog.info("Reverse connection: %s:%d%s", host.c_str(), port,
+              viewOnly ? " (view only)" : "");
+    desktop[0]->addClient(sock, true, (bool)viewOnly);
   } catch (rdr::Exception& e) {
     vlog.error("Reverse connection: %s",e.str());
     return -1;
@@ -479,6 +481,33 @@ void vncRefreshScreenLayout(int scrIdx)
     desktop[scrIdx]->refreshScreenLayout();
   } catch (rdr::Exception& e) {
     vncFatalError("vncRefreshScreenLayout: %s\n", e.str());
+  }
+}
+
+uint64_t vncGetMsc(int scrIdx)
+{
+  try {
+    return desktop[scrIdx]->getMsc();
+  } catch (rdr::Exception& e) {
+    vncFatalError("vncGetMsc: %s\n", e.str());
+  }
+}
+
+void vncQueueMsc(int scrIdx, uint64_t id, uint64_t msc)
+{
+  try {
+    desktop[scrIdx]->queueMsc(id, msc);
+  } catch (rdr::Exception& e) {
+    vncFatalError("vncQueueMsc: %s\n", e.str());
+  }
+}
+
+void vncAbortMsc(int scrIdx, uint64_t id)
+{
+  try {
+    desktop[scrIdx]->abortMsc(id);
+  } catch (rdr::Exception& e) {
+    vncFatalError("vncAbortMsc: %s\n", e.str());
   }
 }
 

@@ -1,7 +1,7 @@
-Index: xserver/configure.ac
-===================================================================
---- xserver.orig/configure.ac
-+++ xserver/configure.ac
+diff --git a/configure.ac b/configure.ac
+index 0909cc5b4..c01873200 100644
+--- a/configure.ac
++++ b/configure.ac
 @@ -74,6 +74,7 @@ dnl forcing an entire recompile.x
  AC_CONFIG_HEADERS(include/version-config.h)
  
@@ -10,35 +10,30 @@ Index: xserver/configure.ac
  AC_PROG_LN_S
  LT_PREREQ([2.2])
  LT_INIT([disable-static win32-dll])
-@@ -1777,6 +1778,10 @@ if test "x$XVFB" = xyes; then
+@@ -1735,6 +1736,14 @@ if test "x$XVFB" = xyes; then
  	AC_SUBST([XVFB_SYS_LIBS])
  fi
  
 +dnl Xvnc DDX
-+AC_SUBST([XVNC_CPPFLAGS], ["-DHAVE_DIX_CONFIG_H $XSERVER_CFLAGS"])
 +AC_SUBST([XVNC_LIBS], ["$FB_LIB $FIXES_LIB $XEXT_LIB $CONFIG_LIB $DBE_LIB $RECORD_LIB $GLX_LIBS $RANDR_LIB $RENDER_LIB $DAMAGE_LIB $DRI3_LIB $PRESENT_LIB $MIEXT_SYNC_LIB $MIEXT_DAMAGE_LIB $MIEXT_SHADOW_LIB $XI_LIB $XKB_LIB $XKB_STUB_LIB $COMPOSITE_LIB $MAIN_LIB"])
 +AC_SUBST([XVNC_SYS_LIBS], ["$GLX_SYS_LIBS"])
++
++PKG_CHECK_MODULES(GBM, "$LIBGBM", [GBM=yes], [GBM=no])
++if test "x$GBM" = xyes; then
++	AC_DEFINE(HAVE_GBM, 1, [Have GBM support])
++fi
  
  dnl Xnest DDX
  
-@@ -1812,6 +1817,8 @@ if test "x$XORG" = xauto; then
- fi
- AC_MSG_RESULT([$XORG])
+@@ -2058,7 +2067,6 @@ if test "x$GLAMOR" = xyes; then
+ 			 [AC_DEFINE(GLAMOR_HAS_EGL_QUERY_DRIVER, 1, [Have GLAMOR_HAS_EGL_QUERY_DRIVER])],
+ 			 [])
  
-+AC_DEFINE_UNQUOTED(XORG_VERSION_CURRENT, [$VENDOR_RELEASE], [Current Xorg version])
-+
- if test "x$XORG" = xyes; then
- 	XORG_DDXINCS='-I$(top_srcdir)/hw/xfree86 -I$(top_srcdir)/hw/xfree86/include -I$(top_srcdir)/hw/xfree86/common'
- 	XORG_OSINCS='-I$(top_srcdir)/hw/xfree86/os-support -I$(top_srcdir)/hw/xfree86/os-support/bus -I$(top_srcdir)/os'
-@@ -2029,7 +2036,6 @@ if test "x$XORG" = xyes; then
- 	AC_DEFINE(XORG_SERVER, 1, [Building Xorg server])
- 	AC_DEFINE(XORGSERVER, 1, [Building Xorg server])
- 	AC_DEFINE(XFree86Server, 1, [Building XFree86 server])
--	AC_DEFINE_UNQUOTED(XORG_VERSION_CURRENT, [$VENDOR_RELEASE], [Current Xorg version])
- 	AC_DEFINE(NEED_XF86_TYPES, 1, [Need XFree86 typedefs])
- 	AC_DEFINE(NEED_XF86_PROTOTYPES, 1, [Need XFree86 helper functions])
- 	AC_DEFINE(__XSERVERNAME__, "Xorg", [Name of X server])
-@@ -2565,6 +2571,7 @@ hw/dmx/Makefile
+-	PKG_CHECK_MODULES(GBM, "$LIBGBM", [GBM=yes], [GBM=no])
+ 	if test "x$GBM" = xyes; then
+ 		AC_DEFINE(GLAMOR_HAS_GBM, 1,
+ 			  [Build glamor with GBM-based EGL support])
+@@ -2523,6 +2531,7 @@ hw/dmx/Makefile
  hw/dmx/man/Makefile
  hw/vfb/Makefile
  hw/vfb/man/Makefile
@@ -46,37 +41,98 @@ Index: xserver/configure.ac
  hw/xnest/Makefile
  hw/xnest/man/Makefile
  hw/xwin/Makefile
-Index: xserver/hw/Makefile.am
-===================================================================
---- xserver.orig/hw/Makefile.am
-+++ xserver/hw/Makefile.am
-@@ -38,7 +38,8 @@ SUBDIRS =			\
- 	$(DMX_SUBDIRS)		\
- 	$(KDRIVE_SUBDIRS)	\
- 	$(XQUARTZ_SUBDIRS)	\
--	$(XWAYLAND_SUBDIRS)
-+	$(XWAYLAND_SUBDIRS)	\
-+	vnc
+diff --git a/dri3/Makefile.am b/dri3/Makefile.am
+index e47a734e0..99c3718a5 100644
+--- a/dri3/Makefile.am
++++ b/dri3/Makefile.am
+@@ -1,7 +1,7 @@
+ noinst_LTLIBRARIES = libdri3.la
+ AM_CFLAGS = \
+-	-DHAVE_XORG_CONFIG_H \
+-	@DIX_CFLAGS@ @XORG_CFLAGS@
++	@DIX_CFLAGS@ \
++	@LIBDRM_CFLAGS@
+
+ libdri3_la_SOURCES = \
+ 	dri3.h \
+diff --git a/dri3/dri3.c b/dri3/dri3.c
+index ba32facd7..191252969 100644
+--- a/dri3/dri3.c
++++ b/dri3/dri3.c
+@@ -20,10 +20,6 @@
+  * OF THIS SOFTWARE.
+  */
  
- DIST_SUBDIRS = dmx xfree86 vfb xnest xwin xquartz kdrive xwayland
+-#ifdef HAVE_XORG_CONFIG_H
+-#include <xorg-config.h>
+-#endif
+-
+ #include "dri3_priv.h"
  
-Index: xserver/mi/miinitext.c
-===================================================================
---- xserver.orig/mi/miinitext.c
-+++ xserver/mi/miinitext.c
-@@ -107,8 +107,15 @@ SOFTWARE.
- #include "os.h"
- #include "globals.h"
+ #include <drm_fourcc.h>
+diff --git a/dri3/dri3_priv.h b/dri3/dri3_priv.h
+index b087a9529..f319d1770 100644
+--- a/dri3/dri3_priv.h
++++ b/dri3/dri3_priv.h
+@@ -23,6 +23,7 @@
+ #ifndef _DRI3PRIV_H_
+ #define _DRI3PRIV_H_
  
-+#ifdef TIGERVNC
-+extern void vncExtensionInit(void);
-+#endif
++#include "dix-config.h"
+ #include <X11/X.h>
+ #include "scrnintstr.h"
+ #include "misc.h"
+diff --git a/dri3/dri3_request.c b/dri3/dri3_request.c
+index 958877efa..687168930 100644
+--- a/dri3/dri3_request.c
++++ b/dri3/dri3_request.c
+@@ -20,10 +20,6 @@
+  * OF THIS SOFTWARE.
+  */
+ 
+-#ifdef HAVE_XORG_CONFIG_H
+-#include <xorg-config.h>
+-#endif
+-
+ #include "dri3_priv.h"
+ #include <syncsrv.h>
+ #include <unistd.h>
+diff --git a/dri3/dri3_screen.c b/dri3/dri3_screen.c
+index b98259753..3c7e5bf60 100644
+--- a/dri3/dri3_screen.c
++++ b/dri3/dri3_screen.c
+@@ -20,10 +20,6 @@
+  * OF THIS SOFTWARE.
+  */
+ 
+-#ifdef HAVE_XORG_CONFIG_H
+-#include <xorg-config.h>
+-#endif
+-
+ #include "dri3_priv.h"
+ #include <syncsdk.h>
+ #include <misync.h>
+diff --git a/hw/Makefile.am b/hw/Makefile.am
+index 19895dc77..3ecfa8b7a 100644
+--- a/hw/Makefile.am
++++ b/hw/Makefile.am
+@@ -44,3 +44,5 @@ DIST_SUBDIRS = dmx xfree86 vfb xnest xwin xquartz kdrive xwayland
+ 
+ relink:
+ 	$(AM_V_at)for i in $(SUBDIRS) ; do $(MAKE) -C $$i relink || exit 1 ; done
 +
- /* List of built-in (statically linked) extensions */
- static const ExtensionModule staticExtensions[] = {
-+#ifdef TIGERVNC
-+    {vncExtensionInit, "VNC-EXTENSION", NULL},
-+#endif
-     {GEExtensionInit, "Generic Event Extension", &noGEExtension},
-     {ShapeExtensionInit, "SHAPE", NULL},
- #ifdef MITSHM
++SUBDIRS += vnc
+diff --git a/include/dix-config.h.in b/include/dix-config.h.in
+index f8fc67067..d53c4e72f 100644
+--- a/include/dix-config.h.in
++++ b/include/dix-config.h.in
+@@ -83,6 +83,9 @@
+ /* Define to 1 if you have the <fcntl.h> header file. */
+ #undef HAVE_FCNTL_H
+ 
++/* Have GBM support */
++#undef HAVE_GBM
++
+ /* Define to 1 if you have the `getdtablesize' function. */
+ #undef HAVE_GETDTABLESIZE
+ 
