@@ -10,6 +10,8 @@ add_executable(suite suite.cxx)
 target_sources(suite PRIVATE
   codec/timed/TimedEncoder.cxx
   stats/EncoderStats.cxx
+  streams/DummyInStream.cxx
+  streams/DummyOutStream.cxx
 )
 
 target_compile_features(suite PRIVATE cxx_std_11)
