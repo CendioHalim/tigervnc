@@ -9,6 +9,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON CACHE INTERNAL "")
 add_executable(suite suite.cxx)
 target_sources(suite PRIVATE
   Manager.cxx
+  Server.cxx
   codec/timed/TimedEncoder.cxx
   codec/timed/timedEncoderFactory.cxx
   stats/EncoderStats.cxx
