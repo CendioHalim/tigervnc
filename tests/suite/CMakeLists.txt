@@ -10,6 +10,10 @@ add_executable(suite suite.cxx)
 target_sources(suite PRIVATE
   Manager.cxx
   Server.cxx
+  Client.cxx
+  codec/Image.cxx
+  codec/ImageDecoder.cxx
+  codec/PPMDecoder.cxx
   codec/timed/TimedEncoder.cxx
   codec/timed/timedEncoderFactory.cxx
   stats/EncoderStats.cxx
