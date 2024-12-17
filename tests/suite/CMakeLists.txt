@@ -11,12 +11,17 @@ target_sources(suite PRIVATE
   Manager.cxx
   Server.cxx
   Client.cxx
+  Benchmark.cxx
+  io/FrameInStream.cxx
+  codec/decoderFactory.cxx
   codec/Image.cxx
   codec/ImageDecoder.cxx
   codec/PPMDecoder.cxx
+  codec/JPEGDecoder.cxx
   codec/timed/TimedEncoder.cxx
   codec/timed/timedEncoderFactory.cxx
   stats/EncoderStats.cxx
+  stats/ManagerStats.cxx
   streams/DummyInStream.cxx
   streams/DummyOutStream.cxx
 )
