@@ -1,5 +1,6 @@
 #include "Benchmark.h"
 #include "io/FrameInStream.h"
+#include "stats/RecorderStats.h"
 
 #include <rdr/Exception.h>
 #include <rfb/EncodeManager.h>
@@ -84,8 +85,9 @@ void Benchmark::runBenchmark(EncoderSettings* settings, size_t len)
   }
 
   std::cout << "Starting benchmark using \"" << filename << "\"\n";
+  RecorderStats recorderStats;
   while (file.peek() != EOF) {
-    const Image* image = is.readImage(file);
+    const Image* image = is.readImage(file, recorderStats);
 
     // For each encoding we want to test, we load an image and loop
     // through all servers
