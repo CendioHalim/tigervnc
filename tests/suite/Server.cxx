@@ -8,7 +8,7 @@ namespace suite {
 
   Server::Server(int width, int height, rfb::PixelFormat pf, bool debug)
     : rfb::SConnection(rfb::AccessFull),
-      settings(defaultEncoderSettings)
+      settings(defaultEncoderSettings), updates(nullptr)
   {
     init(width, height, pf);
     manager = new Manager(this, debug);
@@ -16,7 +16,7 @@ namespace suite {
 
   Server::Server(int width, int height, EncoderSettings settings_,
                                         rfb::PixelFormat pf)
-    : rfb::SConnection(rfb::AccessFull), settings(settings_)
+    : rfb::SConnection(rfb::AccessFull), settings(settings_), updates(nullptr)
   {
     init(width, height, pf);
     manager = new Manager(this, settings_);
@@ -29,13 +29,13 @@ namespace suite {
     setStreams(in, out);
     setWriter(new rfb::SMsgWriter(&client, out));
 
-    this->updates = rfb::SimpleUpdateTracker();
-
     setPixelFormat(fbPF);
     client.setPF(fbPF);
 
     pb_ = new rfb::ManagedPixelBuffer(pf, width,  height);
     setEncodings(sizeof(encodings) / sizeof(*encodings), encodings);
+
+    updates = new rfb::ComparingUpdateTracker(pb_);
   }
 
   Server::~Server()
@@ -56,8 +56,8 @@ namespace suite {
     rfb::UpdateInfo ui;
     const rfb::Region changed(rect);
 
-    updates.add_changed(rect);
-    updates.getUpdateInfo(&ui, changed);
+    updates->add_changed(rect);
+    updates->getUpdateInfo(&ui, changed);
 
     manager->writeUpdate(ui, pb_, nullptr, image->frameTime_);
   }

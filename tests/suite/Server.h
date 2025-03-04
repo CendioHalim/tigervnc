@@ -7,7 +7,7 @@
 #include "codec/Image.h"
 #include "Manager.h"
 #include <rfb/PixelFormat.h>
-#include <rfb/UpdateTracker.h>
+#include <rfb/ComparingUpdateTracker.h>
 #include <rfb/encodings.h>
 
 namespace suite {
@@ -54,7 +54,7 @@ namespace suite {
     DummyOutStream *out;
     Manager *manager;
   protected:
-    rfb::SimpleUpdateTracker updates;
+    rfb::ComparingUpdateTracker* updates;
     rfb::ManagedPixelBuffer* pb_;
     void init(int width, int height, rfb::PixelFormat pf);
   };
