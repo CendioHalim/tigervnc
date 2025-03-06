@@ -22,7 +22,7 @@ namespace suite {
     void startRecording();
     void stopRecording();
 
-    void handleEvents(std::vector<XEvent>& events);
+    bool handleEvents(std::vector<XEvent>& events);
     protected:
     void handleDamagedRect(rfb::Rect &damagedRect, ImageUpdateStats stats);
     rfb::Rect rectFromEvent(XEvent& event);

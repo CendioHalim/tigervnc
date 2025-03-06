@@ -83,7 +83,8 @@ namespace suite {
         continue;
 
       start = std::chrono::steady_clock::now();
-      handleEvents(events);
+      if (!handleEvents(events))
+        continue;
       end = std::chrono::steady_clock::now();
 
       encodeTime = std::chrono::duration<double, std::milli>(end - start);
@@ -129,7 +130,7 @@ namespace suite {
     }
   }
 
-  void Recorder::handleEvents(std::vector<XEvent>& events)
+  bool Recorder::handleEvents(std::vector<XEvent>& events)
   {
     assert(events.size());
 
@@ -141,13 +142,19 @@ namespace suite {
     }
 
     if (!rects.size())
-      return;
+      return false;
 
     // Combine all rects into one bouding rect if we detect any overlap.
     ImageUpdateStats stats;
     detectInteresctions(rects, stats);
     rfb::Rect damagedRect = boundingRect(rects);
+
+    // Filter out empty rects
+    if (damagedRect.is_empty())
+      return false;
+
     handleDamagedRect(damagedRect, stats);
+    return true;
   }
 
   void Recorder::handleDamagedRect(rfb::Rect &damagedRect,
@@ -157,6 +164,8 @@ namespace suite {
     const int height = damagedRect.br.y - damagedRect.tl.y;
     const int x_offset = damagedRect.tl.x;
     const int y_offset = damagedRect.tl.y;
+
+    assert(width > 0 && height > 0);
 
     // Get the damaged region from the display
     ::Image* damagedImage = factory.newImage(dpy, width, height);
@@ -186,6 +195,7 @@ namespace suite {
 
     lastImage = image;
     lastImageStats = stats;
+    return;
   }
 
   rfb::Rect Recorder::rectFromEvent(XEvent& event)
