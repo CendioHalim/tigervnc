@@ -420,6 +420,10 @@ if(UNIX AND NOT APPLE)
     # Portals specific
     find_package(PipeWire)
     find_package(Uuid)
+
+    # wlroots specific
+    find_package(Wayland)
+
   else()
     find_package(GLib REQUIRED)
     find_package(Gio REQUIRED)
@@ -428,9 +432,13 @@ if(UNIX AND NOT APPLE)
     # Portals specific
     find_package(PipeWire REQUIRED)
     find_package(Uuid REQUIRED)
+    find_package(Wayland REQUIRED)
+
+    # wlroots specific
+    find_package(Wayland)
   endif()
   if(NOT GLIB_FOUND OR NOT GIO_FOUND OR NOT GOBJECT_FOUND OR NOT PIPEWIRE_FOUND
-     OR NOT UUID_FOUND)
+     OR NOT UUID_FOUND OR NOT WAYLAND_FOUND)
     set(ENABLE_WAYLAND 0)
     message(WARNING "GLib, Gio, Gobject, PipeWire or Uuid NOT found. w0vncserver disabled.")
   endif()

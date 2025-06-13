@@ -35,6 +35,7 @@
 #include <core/Logger_stdio.h>
 #include <core/LogWriter.h>
 
+#include "wlr/WlrDesktop.h"
 #include "GSocketSource.h"
 #include "RFBTimerSource.h"
 #include "PortalDesktop.h"
@@ -236,6 +237,8 @@ int main(int argc, char** argv)
   try {
     if (PortalDesktop::available()) {
       desktop = new PortalDesktop();
+    } else if (WlrDesktop::available()) {
+      desktop = new WlrDesktop(loop);
     } else {
       fatal_error("No remote desktop implementation found.");
       return -1;
