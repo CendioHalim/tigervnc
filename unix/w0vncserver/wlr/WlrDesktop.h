@@ -14,6 +14,7 @@ class WOutput;
 class WDisplay;
 class WSeat;
 class WShm;
+class WlrVirtualPointer;
 
 class WlrDesktop : public rfb::SDesktop
 {
@@ -26,6 +27,8 @@ public:
   void start() override;
   virtual void stop() override;
   virtual void frameTick(uint64_t msc) override;
+  virtual void pointerEvent(const core::Point& pos,
+                            uint16_t buttonMask) override;
   void queryConnection(network::Socket* sock,
                        const char* userName) override;
   void terminate() override;
@@ -44,6 +47,7 @@ private:
   WOutput* output;
   WlrPixelBuffer* pb;
   GWaylandSource* wlrSource;
+  WlrVirtualPointer* virtualPointer;
 };
 
 #endif // __WLR_DESKTOP_H__

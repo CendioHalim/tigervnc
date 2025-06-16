@@ -14,6 +14,9 @@
 #include "../wayland/WDisplay.h"
 #include "../wayland/WOutput.h"
 #include "../wayland/WShm.h"
+#include "../wayland/WSeat.h"
+#include "../wayland/WDisplay.h"
+#include "WlrVirtualPointer.h"
 #include "WlrPixelBuffer.h"
 #include "WlrDesktop.h"
 
@@ -23,7 +26,8 @@ bool WlrDesktop::available()
 {
   WDisplay display;
 
-  return display.interfaceAvailable("zwlr_screencopy_manager_v1");
+  return display.interfaceAvailable("zwlr_screencopy_manager_v1") &&
+         display.interfaceAvailable("zwlr_virtual_pointer_manager_v1");
 }
 
 WlrDesktop::WlrDesktop(GMainLoop* loop_)
@@ -37,12 +41,15 @@ WlrDesktop::WlrDesktop(GMainLoop* loop_)
     fatal_error("Failed to connect to wayland display");
 
   output = new WOutput(display);
+  seat = new WSeat(display);
 }
 
 WlrDesktop::~WlrDesktop()
 {
   delete pb;
   delete wlrSource;
+  delete virtualPointer;
+  delete seat;
   delete output;
   delete display;
 }
@@ -56,6 +63,8 @@ void WlrDesktop::start()
 {
   std::function<void()> cb = [this]() {
     server->setPixelBuffer(pb);
+    virtualPointer = new WlrVirtualPointer(display, seat, pb->width(),
+                                           pb->height());
   };
 
   pb = new WlrPixelBuffer(display, output, server, cb);
@@ -71,6 +80,9 @@ void WlrDesktop::stop()
   delete wlrSource;
   wlrSource = nullptr;
 
+  delete virtualPointer;
+  virtualPointer = nullptr;
+
   delete pb;
   pb = nullptr;
 }
@@ -79,6 +91,12 @@ void WlrDesktop::frameTick(uint64_t /* msc */)
 {
   // FIXME: Should we use the monitor refresh rate instead?
   pb->captureFrame();
+}
+
+void WlrDesktop::pointerEvent(const core::Point& pos,
+                              uint16_t buttonMask)
+{
+  virtualPointer->pointerEvent(pos, buttonMask);
 }
 
 void WlrDesktop::queryConnection(network::Socket* sock,
