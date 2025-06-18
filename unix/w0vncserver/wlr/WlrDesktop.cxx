@@ -16,6 +16,7 @@
 #include "../wayland/WShm.h"
 #include "../wayland/WSeat.h"
 #include "../wayland/WDisplay.h"
+#include "WlrVirtualKeyboard.h"
 #include "WlrVirtualPointer.h"
 #include "WlrPixelBuffer.h"
 #include "WlrDesktop.h"
@@ -49,6 +50,7 @@ WlrDesktop::~WlrDesktop()
   delete pb;
   delete wlrSource;
   delete virtualPointer;
+  delete virtualKeyboard;
   delete seat;
   delete output;
   delete display;
@@ -65,6 +67,7 @@ void WlrDesktop::start()
     server->setPixelBuffer(pb);
     virtualPointer = new WlrVirtualPointer(display, seat, pb->width(),
                                            pb->height());
+    virtualKeyboard = new WlrVirtualKeyboard(display, seat);
   };
 
   pb = new WlrPixelBuffer(display, output, server, cb);
@@ -76,6 +79,9 @@ void WlrDesktop::start()
 void WlrDesktop::stop()
 {
   server->setPixelBuffer(nullptr);
+
+  delete virtualKeyboard;
+  virtualKeyboard = nullptr;
 
   delete wlrSource;
   wlrSource = nullptr;
@@ -97,6 +103,11 @@ void WlrDesktop::pointerEvent(const core::Point& pos,
                               uint16_t buttonMask)
 {
   virtualPointer->pointerEvent(pos, buttonMask);
+}
+
+void WlrDesktop::keyEvent(uint32_t keysym, uint32_t keycode, bool down)
+{
+  virtualKeyboard->keyEvent(keysym, keycode, down);
 }
 
 void WlrDesktop::queryConnection(network::Socket* sock,

@@ -15,6 +15,7 @@ class WDisplay;
 class WSeat;
 class WShm;
 class WlrVirtualPointer;
+class WlrVirtualKeyboard;
 
 class WlrDesktop : public rfb::SDesktop
 {
@@ -27,6 +28,8 @@ public:
   void start() override;
   virtual void stop() override;
   virtual void frameTick(uint64_t msc) override;
+  virtual void keyEvent(uint32_t keysym, uint32_t keycode,
+                        bool down) override;
   virtual void pointerEvent(const core::Point& pos,
                             uint16_t buttonMask) override;
   void queryConnection(network::Socket* sock,
@@ -48,6 +51,7 @@ private:
   WlrPixelBuffer* pb;
   GWaylandSource* wlrSource;
   WlrVirtualPointer* virtualPointer;
+  WlrVirtualKeyboard* virtualKeyboard;
 };
 
 #endif // __WLR_DESKTOP_H__

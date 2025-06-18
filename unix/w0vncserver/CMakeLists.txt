@@ -12,10 +12,12 @@ add_executable(w0vncserver
   wayland/WSeat.cxx
   wayland/WShm.cxx
   wayland/WShmPool.cxx
+  wayland/WKeyboard.cxx
   wlr/WlrDesktop.cxx
   wlr/WlrPixelBuffer.cxx
   wlr/WlrScreencopyManager.cxx
   wlr/WlrVirtualPointer.cxx
+  wlr/WlrVirtualKeyboard.cxx
   shm.c
   w0vncserver.cxx
   GSocketSource.cxx
@@ -31,7 +33,7 @@ set(GEN_WAYLAND_SRCS "")
 set(WLR_PROTOCOLS
   wlr-screencopy-unstable-v1
   wlr-virtual-pointer-unstable-v1
-  # FIXME: add virtual-keyboard-unstable-v1 later
+  virtual-keyboard-unstable-v1
 )
 
 foreach(P ${WLR_PROTOCOLS})
