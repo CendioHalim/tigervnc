@@ -7,6 +7,7 @@
 
 struct zwp_virtual_keyboard_manager_v1;
 struct zwp_virtual_keyboard_v1;
+struct KeyboardModifiersState;
 class WDisplay;
 class WSeat;
 
@@ -20,5 +21,7 @@ public:
 private:
   zwp_virtual_keyboard_manager_v1* manager;
   zwp_virtual_keyboard_v1* keyboard;
+  KeyboardModifiersState* modifierState;
+  WSeat* seat;
 };
 #endif // __WLR_VIRTUAL_KEYBOARD_H__

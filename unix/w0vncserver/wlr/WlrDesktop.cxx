@@ -28,7 +28,8 @@ bool WlrDesktop::available()
   WDisplay display;
 
   return display.interfaceAvailable("zwlr_screencopy_manager_v1") &&
-         display.interfaceAvailable("zwlr_virtual_pointer_manager_v1");
+         display.interfaceAvailable("zwlr_virtual_pointer_manager_v1") &&
+         display.interfaceAvailable("zwp_virtual_keyboard_manager_v1");
 }
 
 WlrDesktop::WlrDesktop(GMainLoop* loop_)
