@@ -118,6 +118,25 @@ void WlrScreencopyManager::captureFrameDone()
   frame = nullptr;
 }
 
+void WlrScreencopyManager::resize()
+{
+  assert(output->hasResized());
+
+  if (frame)
+    zwlr_screencopy_frame_v1_destroy(frame);
+  frame = nullptr;
+
+  if (buffer)
+    wl_buffer_destroy(buffer);
+  buffer = nullptr;
+
+  delete pool;
+
+  initBuffers(output->getWidth() * output->getHeight() * 4);
+
+  output->resizeComplete();
+}
+
 void WlrScreencopyManager::initBuffers(size_t size)
 {
   int fd;
@@ -164,6 +183,11 @@ void WlrScreencopyManager::handleScreencopyBuffer(uint32_t format,
                                                   uint32_t height,
                                                   uint32_t stride)
 {
+  if (output->hasResized()) {
+    resize();
+    return;
+  }
+
   delete info;
 
   info = new BufferInfo {

@@ -22,6 +22,9 @@ public:
   WOutput(WDisplay* display);
   ~WOutput();
 
+  void resizeComplete();
+  bool hasResized() const { return resized; }
+
   wl_output* getOutput() const { return output; }
   uint32_t getWidth() const { return mode.width; }
   uint32_t getHeight() const { return mode.height; }
@@ -41,6 +44,7 @@ private:
 private:
   wl_output* output;
   Mode mode;
+  bool resized;
   std::string name;
   std::string description;
   static const wl_output_listener listener;

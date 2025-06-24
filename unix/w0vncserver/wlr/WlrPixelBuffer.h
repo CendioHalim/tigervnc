@@ -9,12 +9,8 @@
 
 namespace rfb { class VNCServer; }
 
-struct wl_buffer;
-struct BufferInfo;
 class WOutput;
 class WDisplay;
-class WShm;
-class WShmPool;
 
 class WlrPixelBuffer : public rfb::FullFramePixelBuffer,
                        public WlrScreencopyManager {
@@ -28,6 +24,7 @@ public:
 
 protected:
   virtual void captureFrameDone() override;
+  virtual void resize() override;
 
 private:
   bool captureInProgress;

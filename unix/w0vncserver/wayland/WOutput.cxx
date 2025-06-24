@@ -54,6 +54,13 @@ WOutput::~WOutput()
   wl_output_destroy(output);
 }
 
+void WOutput::resizeComplete()
+{
+  assert(resized);
+  resized = false;
+}
+
+
 void WOutput::handleGeometry(int32_t /* x */, int32_t /* y */,
                              int32_t /* physical_width */,
                              int32_t /* physical_height */,
@@ -70,17 +77,27 @@ void WOutput::handleGeometry(int32_t /* x */, int32_t /* y */,
 void WOutput::handleMode(uint32_t flags, int32_t width, int32_t height,
                          int32_t refresh)
 {
+  Mode mode_;
+
   // FIXME: Handle multiple screens
   // FIXME: The flags "describe properties of an output mode".
   //        possible values are 0x1 - current
   //                            0x2 - preferred
   //        Don't think we care?
-  mode = {
+  mode_ = {
     .flags = flags,
     .width = width,
     .height = height,
     .refresh = refresh,
   };
+
+  if (mode.width) {
+    resized = true;
+    vlog.debug("Resized from %dx%d to %dx%d", mode.width, mode.height,
+               mode_.width, mode_.height);
+  }
+
+  mode = mode_;
 }
 
 void WOutput::handleDone()

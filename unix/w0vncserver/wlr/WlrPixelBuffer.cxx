@@ -36,6 +36,11 @@ WlrPixelBuffer::~WlrPixelBuffer()
 
 void WlrPixelBuffer::captureFrame()
 {
+  if (output->hasResized()) {
+    vlog.debug("Skip capture frame, we are resizing");
+    resize();
+    return;
+  }
   // We're too slow, skip this frame
   if (captureInProgress) {
     // FIXME: We're likely to make two calls to startFrameCapture()
@@ -87,4 +92,20 @@ void WlrPixelBuffer::captureFrameDone()
   WlrScreencopyManager::captureFrameDone();
 
   server->add_changed({{0, 0, width(), height()}});
+}
+
+void WlrPixelBuffer::resize()
+{
+  WlrScreencopyManager::resize();
+
+  setBuffer(output->getWidth(), output->getHeight(), getBufferData(),
+            output->getWidth());
+
+  server->setPixelBuffer(this);
+
+  if (captureInProgress)
+    server->unblockUpdates();
+  captureInProgress = false;
+
+  captureFrame();
 }
