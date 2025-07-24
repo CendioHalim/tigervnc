@@ -91,7 +91,7 @@ void WlrPixelBuffer::captureFrameDone()
 
   WlrScreencopyManager::captureFrameDone();
 
-  server->add_changed({{0, 0, width(), height()}});
+  server->add_changed(getDamage());
 }
 
 void WlrPixelBuffer::resize()

@@ -1,6 +1,8 @@
 #ifndef __WLR_SCREENCOPY_H__
 #define __WLR_SCREENCOPY_H__
 
+#include <core/Region.h>
+
 #include "wlr-screencopy-unstable-v1.h"
 
 #include "../wayland/WObject.h"
@@ -33,6 +35,8 @@ protected:
 
   rfb::PixelFormat getPixelFormat();
 
+  core::Region getDamage() { return accumulatedDamage; }
+
 private:
   void initBuffers(size_t size);
   rfb::PixelFormat convertPixelformat(uint32_t format);
@@ -59,6 +63,7 @@ private:
   WShm* shm;
   WShmPool* pool;
   wl_buffer* buffer;
+  core::Region accumulatedDamage;
   static const zwlr_screencopy_frame_v1_listener listener;
 };
 

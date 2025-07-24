@@ -104,6 +104,8 @@ void WlrScreencopyManager::captureFrame()
 {
   assert(frame == nullptr);
 
+  accumulatedDamage.clear();
+
   // FIXME: Handle multiple outputs
   frame = zwlr_screencopy_manager_v1_capture_output(screencopyManager,
                                                     1, output->getOutput());
@@ -231,12 +233,18 @@ void WlrScreencopyManager::handleScreencopyFailed()
   fatal_error("Frame could not be copied");
 }
 
-void WlrScreencopyManager::handleScreencopyDamage(uint32_t /* x */,
-                                                  uint32_t /* y */,
-                                                  uint32_t /* width */,
-                                                  uint32_t /* height */)
+void WlrScreencopyManager::handleScreencopyDamage(uint32_t x,
+                                                  uint32_t y,
+                                                  uint32_t width,
+                                                  uint32_t height)
 {
-  // FIXME: Implement damage.
+  core::Point tl;
+  core::Point br;
+
+  tl = {static_cast<int>(x), static_cast<int>(y)};
+  br = {static_cast<int>(x + width), static_cast<int>(y + height)};
+
+  accumulatedDamage.assign_union({{tl, br}});
 }
 
 void WlrScreencopyManager::handleScreencopyLinuxDmabuf(uint32_t /* format */,
@@ -256,5 +264,5 @@ void WlrScreencopyManager::handleScreencopyBufferDone()
                                 output->getWidth() * 4, info->format);
   }
 
-  zwlr_screencopy_frame_v1_copy(frame, buffer);
+  zwlr_screencopy_frame_v1_copy_with_damage(frame, buffer);
 }
