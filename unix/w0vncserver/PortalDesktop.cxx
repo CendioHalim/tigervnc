@@ -33,19 +33,33 @@
 #include "w0vncserver.h"
 #include "portals/RemoteDesktop.h"
 #include "portals/PortalProxy.h"
+#include "wayland/WDisplay.h"
+#include "wayland/WOutput.h"
+#include "wayland/WXdgOutputManager.h"
+#include "wayland/GWaylandSource.h"
 #include "PipeWirePixelBuffer.h"
 #include "PortalDesktop.h"
 
 static core::LogWriter vlog("PortalDesktop");
 
-PortalDesktop::PortalDesktop()
-  : server(nullptr), remoteDesktop(nullptr), pb(nullptr)
+PortalDesktop::PortalDesktop(GMainLoop* loop_)
+  : server(nullptr), remoteDesktop(nullptr), pb(nullptr),
+    display(nullptr), output(nullptr), waylandSource(nullptr),
+    loop(loop_), xdgOutputManager(nullptr)
 {
+  display = new WDisplay();
+  output = new WOutput(display);
+  xdgOutputManager = new WXdgOutputManager(display, output);
 }
 
 PortalDesktop::~PortalDesktop()
 {
   delete remoteDesktop;
+  delete waylandSource;
+  delete xdgOutputManager;
+  delete output;
+  delete display;
+  delete pb;
 }
 
 void PortalDesktop::init(rfb::VNCServer* vs)
@@ -60,6 +74,8 @@ void PortalDesktop::start()
   std::function<void(int, uint32_t)> cb = [this](int fd, uint32_t id) {
     try {
       pb = new PipeWirePixelBuffer(fd, id, server);
+      waylandSource = new GWaylandSource(display);
+      waylandSource->attach(g_main_loop_get_context(loop));
     } catch (std::exception& e) {
       fatal_error("error initializing PipeWirePixelBuffer: %s", e.what());
     }
@@ -78,6 +94,9 @@ void PortalDesktop::stop()
 
   delete remoteDesktop;
   remoteDesktop = nullptr;
+
+  delete waylandSource;
+  waylandSource = nullptr;
 }
 
 void PortalDesktop::queryConnection(network::Socket* sock,
@@ -108,7 +127,10 @@ void PortalDesktop::keyEvent(uint32_t keysym, uint32_t keycode, bool down)
 void PortalDesktop::pointerEvent(const core::Point& pos,
                             uint16_t buttonMask)
 {
-  remoteDesktop->pointerEvent(pos.x, pos.y, buttonMask);
+  double xScaleFactor = (double)pb->width() / xdgOutputManager->getLogicalWidth();
+  double yScaleFactor = (double)pb->height() / xdgOutputManager->getLogicalHeight();
+
+  remoteDesktop->pointerEvent(pos.x / xScaleFactor, pos.y / yScaleFactor, buttonMask);
 }
 
 bool PortalDesktop::available()

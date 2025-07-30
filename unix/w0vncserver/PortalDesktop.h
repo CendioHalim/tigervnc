@@ -28,11 +28,15 @@ class PipeWirePixelBuffer;
 namespace rfb { class VNCServer; }
 
 class RemoteDesktop;
+class WDisplay;
+class WOutput;
+class WXdgOutputManager;
+class GWaylandSource;
 
 class PortalDesktop : public rfb::SDesktop
 {
 public:
-  PortalDesktop();
+  PortalDesktop(GMainLoop* loop);
   virtual ~PortalDesktop();
 
   // -=- SDesktop interface
@@ -56,6 +60,13 @@ protected:
 
   RemoteDesktop* remoteDesktop;
   PipeWirePixelBuffer* pb;
+
+private:
+  WDisplay* display;
+  WOutput* output;
+  GWaylandSource* waylandSource;
+  GMainLoop* loop;
+  WXdgOutputManager* xdgOutputManager;
 };
 
 #endif // __PORTAL_DESKTOP_H__

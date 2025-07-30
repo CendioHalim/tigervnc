@@ -236,7 +236,7 @@ int main(int argc, char** argv)
 
   try {
     if (PortalDesktop::available()) {
-      desktop = new PortalDesktop();
+      desktop = new PortalDesktop(loop);
     } else if (WlrDesktop::available()) {
       desktop = new WlrDesktop(loop);
     } else {

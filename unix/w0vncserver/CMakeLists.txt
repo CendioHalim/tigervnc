@@ -14,6 +14,7 @@ add_executable(w0vncserver
   wayland/WShm.cxx
   wayland/WShmPool.cxx
   wayland/WKeyboard.cxx
+  wayland/WXdgOutputManager.cxx
   wlr/WlrDesktop.cxx
   wlr/WlrPixelBuffer.cxx
   wlr/WlrScreencopyManager.cxx
@@ -35,6 +36,7 @@ set(WLR_PROTOCOLS
   wlr-screencopy-unstable-v1
   wlr-virtual-pointer-unstable-v1
   virtual-keyboard-unstable-v1
+  xdg-output-unstable-v1
 )
 
 foreach(P ${WLR_PROTOCOLS})
