@@ -16,6 +16,8 @@
  * USA.
  */
 
+#include <X11/Xutil.h>
+#include <gio/gio.h>
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -133,6 +135,37 @@ void PortalProxy::call(const char* method, GVariant* parameters,
   }
 
   g_variant_unref(result);
+}
+
+void PortalProxy::subscribe(const char* member,
+                            std::function<void(GVariant* parameters)>
+                              signalCallback)
+{
+  struct PortalCall {
+    std::function<void(GVariant* parameters)> callback;
+    uint32_t signalId;
+    PortalProxy* parent;
+  };
+
+  PortalCall* call;
+  call = new PortalCall{signalCallback, 0, this};
+
+  call->signalId = g_dbus_connection_signal_subscribe(
+                      connection,
+                      "org.freedesktop.portal.Desktop",
+                      g_dbus_proxy_get_interface_name(proxy),
+                      member, "/org/freedesktop/portal/desktop", nullptr,
+                      G_DBUS_SIGNAL_FLAGS_NONE,
+                      [](GDBusConnection*, const char*, const char*,
+                        const char*, const char*,
+                        GVariant *parameters_, void* userData) {
+                          PortalCall* call_ = (PortalCall*)userData;
+                          call_->callback(parameters_);
+                      },
+                      call, [](void* userData) {
+                        delete (PortalCall*)userData;
+                    });
+
 }
 
 std::string PortalProxy::newToken()

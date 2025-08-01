@@ -43,6 +43,9 @@ public:
             std::function<void(GVariant* parameters)>
               signalCallback = nullptr,
             GDBusCallFlags flags = G_DBUS_CALL_FLAGS_NONE);
+  void subscribe(const char* member,
+                 std::function<void(GVariant* parameters)>
+                   signalCallback);
 
   // Generates a unique request token
   static std::string newToken();

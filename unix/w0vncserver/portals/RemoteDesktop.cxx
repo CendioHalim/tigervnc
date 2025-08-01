@@ -68,6 +68,12 @@ static const char* RESTORE_TOKEN_FILENAME =  "restoretoken";
 
 static core::LogWriter vlog("RemoteDesktop");
 
+struct PendingData {
+  std::string data;
+  uint32_t serial;
+  int fd;
+};
+
 static int getInputCode(uint32_t button)
 {
   switch (button) {
@@ -92,10 +98,9 @@ RemoteDesktop::RemoteDesktop(std::string restoreToken_,
                              std::function<void(const char*)>
                                cancelStartCb_)
   : sessionStarted(false), oldButtonMask(0), selectedDevices(0),
-    sessionHandle(""), remoteDesktop(nullptr), screenCast(nullptr),
-    session(nullptr), restoreToken(restoreToken_),
-    startPipewireCb(startPipewireCb_),
-    cancelStartCb(cancelStartCb_)
+    clipboardEnabled(false), sessionHandle(""), remoteDesktop(nullptr),
+    screenCast(nullptr), clipboard(nullptr), session(nullptr),
+    restoreToken(restoreToken_), startPipewireCb(startPipewireCb_), cancelStartCb(cancelStartCb_)
 {
   remoteDesktop = new PortalProxy("org.freedesktop.portal.Desktop",
                                   "/org/freedesktop/portal/desktop",
@@ -103,6 +108,9 @@ RemoteDesktop::RemoteDesktop(std::string restoreToken_,
   screenCast = new PortalProxy("org.freedesktop.portal.Desktop",
                                "/org/freedesktop/portal/desktop",
                                "org.freedesktop.portal.ScreenCast");
+  clipboard = new PortalProxy("org.freedesktop.portal.Desktop",
+                              "/org/freedesktop/portal/desktop",
+                              "org.freedesktop.portal.Clipboard");
 }
 
 RemoteDesktop::~RemoteDesktop()
@@ -263,6 +271,79 @@ void RemoteDesktop::createSession()
                                 this, std::placeholders::_1));
 }
 
+void RemoteDesktop::setSelection(const char* data)
+{
+  GVariantBuilder optionsBuilder;
+  GVariant* params;
+  GVariant* mimeTypes;
+
+  const char* types[] = {
+    "text/plain",
+    "text/plain;charset=utf-8",
+    nullptr
+  };
+
+  clientData = data;
+
+  mimeTypes = g_variant_new_strv(types,-1);
+
+  g_variant_builder_init(&optionsBuilder, G_VARIANT_TYPE_VARDICT);
+  g_variant_builder_add(&optionsBuilder, "{sv}", "mime_types", mimeTypes);
+  params = g_variant_new("(oa{sv})", sessionHandle.c_str(),
+                         &optionsBuilder);
+
+  clipboard->call("SetSelection", params);
+
+}
+
+void RemoteDesktop::selectionWrite(uint32_t serial)
+{
+  GError* error = nullptr;
+  GVariant* params;
+
+  if (!clipboardEnabled)
+    return;
+
+  params = g_variant_new("(ou)", (sessionHandle.c_str()),
+                                  serial);
+
+  g_dbus_proxy_call_with_unix_fd_list(
+    clipboard->getProxy(),
+    "SelectionWrite", params, G_DBUS_CALL_FLAGS_NONE, 3000,
+    nullptr, nullptr,
+    [](GObject* proxy, GAsyncResult* res, void* userData) {
+      ((RemoteDesktop*)(userData))->handleSelectionWrite(proxy, res);
+     }, this);
+
+  if (error) {
+    vlog.error("Clipboard SelectionWrite failed: %s", error->message);
+    g_error_free(error);
+    return;
+  }
+}
+
+void RemoteDesktop::selectionWriteDone(uint32_t serial, bool success)
+{
+  GError* error = nullptr;
+  GVariant* params;
+  GVariant* result;
+
+  params = g_variant_new("(oub)", sessionHandle.c_str(),
+                         serial, success);
+
+  result = g_dbus_proxy_call_sync(clipboard->getProxy(),
+                                  "SelectionWriteDone", params,
+                                  G_DBUS_CALL_FLAGS_NONE, 3000,
+                                  nullptr, &error);
+  if (error) {
+    vlog.error("Clipboard.SelectionWriteDone failed: %s", error->message);
+    g_error_free(error);
+    return;
+  }
+
+  g_variant_unref(result);
+}
+
 void RemoteDesktop::closeSession()
 {
   if (session && sessionStarted)
@@ -329,6 +410,18 @@ void RemoteDesktop::selectSources()
   screenCast->call("SelectSources", params, requestHandleToken.c_str(),
                    std::bind(&RemoteDesktop::handleSelectSources,
                              this, std::placeholders::_1));
+}
+
+void RemoteDesktop::requestClipboard()
+{
+  GVariant* params;
+  GVariantBuilder optionsBuilder;
+
+  g_variant_builder_init(&optionsBuilder, G_VARIANT_TYPE_VARDICT);
+  params = g_variant_new("(oa{sv})", sessionHandle.c_str(), &optionsBuilder);
+
+  clipboard->call("RequestClipboard", params);
+  start();
 }
 
 void RemoteDesktop::start()
@@ -404,6 +497,8 @@ void RemoteDesktop::handleCreateSession(GVariant *parameters)
   g_variant_unref(result);
 
   sessionHandle = g_variant_get_string(sessionHandleVariant, nullptr);
+  vlog.debug("sessionHandle set to: %s", sessionHandle.c_str());
+
   g_variant_unref(sessionHandleVariant);
 
   // This proxy is used to to close the session.
@@ -452,6 +547,21 @@ void RemoteDesktop::handleStart(GVariant* parameters)
                                     G_VARIANT_TYPE_ARRAY);
   g_variant_unref(result);
 
+  clipboardEnabled = g_variant_get_boolean(
+                       g_variant_lookup_value(result,"clipboard_enabled",
+                                              G_VARIANT_TYPE_BOOLEAN));
+
+  vlog.debug("Clipbarod enabled: %d", clipboardEnabled);
+
+  if (clipboardEnabled) {
+    clipboard->subscribe("SelectionTransfer",
+                         std::bind(&RemoteDesktop::handleSelectionTransfer,
+                                   this, std::placeholders::_1));
+    clipboard->subscribe("SelectionOwnerChanged",
+                         std::bind(&RemoteDesktop::handleSelectionOwnerChanged,
+                                   this, std::placeholders::_1));
+  }
+
   if (!parseStreams(streams_)) {
     g_variant_unref(streams_);
     fatal_error("Failed to parse streams");
@@ -471,7 +581,7 @@ void RemoteDesktop::handleStart(GVariant* parameters)
 
 void RemoteDesktop::handleSelectSources(GVariant* /* parameters */)
 {
-  start();
+  requestClipboard();
 }
 
 void RemoteDesktop::handleSelectDevices(GVariant* /* parameters */)
@@ -524,6 +634,96 @@ void RemoteDesktop::handleOpenPipewireRemote(GObject *proxy,
 
   // FIXME: Handle multiple streams
   startPipewireCb(fd, pipewireNodeId);
+}
+
+void RemoteDesktop::handleSelectionWrite(GObject* proxy,
+                                         GAsyncResult* res)
+{
+  GError* error = nullptr;
+  GVariant* response;
+  GUnixFDList* fdList = nullptr;
+  int fd;
+
+  assert(G_IS_DBUS_PROXY(proxy));
+
+  response = g_dbus_proxy_call_with_unix_fd_list_finish(G_DBUS_PROXY(proxy),
+                                                        &fdList, res, &error);
+
+  (void)response;
+
+  if (error) {
+    std::string msg(error->message);
+    g_error_free(error);
+    fatal_error("%s", msg.c_str());
+    return;
+  }
+
+  // FIXME: dont harcode 0?
+  fd = g_unix_fd_list_get(fdList, 0, &error);
+  if (error) {
+    std::string msg(error->message);
+    g_error_free(error);
+    g_object_unref(fdList);
+    fatal_error("%s", msg.c_str());
+    return;
+  }
+
+  PendingData pending = pendingData.front();
+  pendingData.pop_front();
+
+  if (write(fd, pending.data.c_str(), pending.data.length() + 1) < 0) {
+    vlog.error("Clipboard write to fd failed: %s", strerror(errno));
+    if (close(fd) != 0)
+      vlog.error("Failed to close fd: %s", strerror(errno));
+
+    selectionWriteDone(pending.serial, false);
+    g_object_unref(fdList);
+    return;
+  }
+
+  if (close(fd) != 0) {
+    vlog.error("Failed to close fd: %s", strerror(errno));
+    selectionWriteDone(pending.serial, false);
+  } else {
+    selectionWriteDone(pending.serial, true);
+  }
+
+  g_object_unref(fdList);
+}
+
+void RemoteDesktop::handleSelectionTransfer(GVariant* parameters)
+{
+  uint32_t serial;
+  const char* sessionHandle_;
+  const char* mimeType;
+
+  g_variant_get(parameters, "(osu)", &sessionHandle_, &mimeType, &serial);
+
+  if (strcmp(sessionHandle_, sessionHandle.c_str()) != 0) {
+    vlog.debug("SelectionTransfer: Ignoring selection from another session");
+    return;
+  }
+
+  if (strcmp(mimeType, "text/plain;charset=utf-8") != 0) {
+    vlog.debug("SelectionTransfer: Ignoring selection with unsupported mime type %s",
+               mimeType);
+    return;
+  }
+
+  PendingData pending = PendingData();
+  pending.data = clientData;
+  pending.serial = serial;
+  pending.fd = -1;
+  pendingData.push_back(pending);
+
+  vlog.debug("SelectionTransfer: %s", g_variant_print(parameters, true));
+  vlog.debug("handleSelectionTransfer serial: %d", serial);
+  selectionWrite(serial);
+}
+
+void RemoteDesktop::handleSelectionOwnerChanged(GVariant* parameters)
+{
+  vlog.debug("SelectionOwnerChanged: %s", g_variant_print(parameters, true));
 }
 
 bool RemoteDesktop::parseStreams(GVariant* streams)

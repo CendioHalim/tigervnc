@@ -140,6 +140,21 @@ void PortalDesktop::pointerEvent(const core::Point& pos,
   remoteDesktop->notifyPointerMotionAbsolute(pos.x, pos.y, buttonMask);
 }
 
+void PortalDesktop::handleClipboardRequest()
+{
+}
+
+void PortalDesktop::handleClipboardAnnounce(bool available)
+{
+  if (available)
+    server->requestClipboard();
+}
+
+void PortalDesktop::handleClipboardData(const char* data)
+{
+  remoteDesktop->setSelection(data);
+}
+
 bool PortalDesktop::available()
 {
   std::vector<std::string> interfaces = {

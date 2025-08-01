@@ -23,12 +23,15 @@
 
 #include <functional>
 #include <string>
+#include <list>
+#include <map>
 
 #include <gio/gio.h>
 
 namespace rfb { class VNCServer; }
 
 class PortalProxy;
+struct PendingData;
 
 class RemoteDesktop {
 public:
@@ -51,20 +54,29 @@ public:
 
   std::string getRestoreToken() const { return restoreToken; }
 
+  void setSelection(const char* data);
 private:
-  // Portal methods
+  void selectionWrite(uint32_t serial);
+  void selectionWriteDone(uint32_t serial, bool success);
   void closeSession();
   void selectDevices();
   void selectSources();
+  void requestClipboard();
   void start();
   void openPipewireRemote();
 
   // Portal signal callbacks
-  void handleCreateSession(GVariant* parameters);
-  void handleStart(GVariant* parameters);
-  void handleSelectDevices(GVariant* parameters);
-  void handleSelectSources(GVariant* parameters);
-  void handleOpenPipewireRemote(GObject* proxy, GAsyncResult* res);
+  void handleCreateSession(GVariant *parameters);
+  void handleStart(GVariant *parameters);
+  void handleSelectDevices(GVariant *parameters);
+  void handleSelectSources(GVariant *parameters);
+  void handleRequestClipboard(GVariant *parameters);
+  void handleOpenPipewireRemote(GObject *proxy, GAsyncResult *res);
+
+  // Clipboard
+  void handleSelectionWrite(GObject* proxy, GAsyncResult* res);
+  void handleSelectionTransfer(GVariant* parameters);
+  void handleSelectionOwnerChanged(GVariant* parameters);
 
   // pointerEvent help functions
   void notifyPointerButton(int32_t button, bool down);
@@ -84,15 +96,20 @@ private:
   bool sessionStarted;
   uint16_t oldButtonMask;
   uint32_t selectedDevices;
+  bool clipboardEnabled;
   std::string sessionHandle;
+  std::list<PendingData> pendingData;
+  std::string clientData;
 
   uint32_t pipewireNodeId;
   PortalProxy* remoteDesktop;
   PortalProxy* screenCast;
+  PortalProxy* clipboard;
   PortalProxy* session;
 
   std::string restoreToken;
 
+  std::map<uint32_t, int32_t> pendingSelections;
   std::function<void(int fd, uint32_t nodeId)> startPipewireCb;
   std::function<void(const char* reason)> cancelStartCb;
 };
