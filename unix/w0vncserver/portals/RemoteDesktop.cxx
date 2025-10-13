@@ -276,14 +276,16 @@ void RemoteDesktop::setSelection(const char* data)
   GVariantBuilder optionsBuilder;
   GVariant* params;
   GVariant* mimeTypes;
+  (void)data;
 
   const char* types[] = {
-    "text/plain",
-    "text/plain;charset=utf-8",
+    "text/uri-list",
+    "UTF8_STRING",
     nullptr
   };
 
-  clientData = data;
+  // clientData = data;
+  clientData = "file:///home/cendio/fusemount/in-memory-file.txt\r\n";
 
   mimeTypes = g_variant_new_strv(types,-1);
 
@@ -704,11 +706,11 @@ void RemoteDesktop::handleSelectionTransfer(GVariant* parameters)
     return;
   }
 
-  if (strcmp(mimeType, "text/plain;charset=utf-8") != 0) {
-    vlog.debug("SelectionTransfer: Ignoring selection with unsupported mime type %s",
-               mimeType);
-    return;
-  }
+  // if (strcmp(mimeType, "text/plain;charset=utf-8") != 0) {
+  //   vlog.debug("SelectionTransfer: Ignoring selection with unsupported mime type %s",
+  //              mimeType);
+  //   return;
+  // }
 
   PendingData pending = PendingData();
   pending.data = clientData;
