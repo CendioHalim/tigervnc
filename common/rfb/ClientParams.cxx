@@ -257,3 +257,10 @@ bool ClientParams::supportsExtendedMouseButtons() const
     return true;
   return false;
 }
+
+bool ClientParams::supportsClipboardMime() const
+{
+  if (supportsEncoding(pseudoEncodingClipboardMime))
+    return true;
+  return false;
+}

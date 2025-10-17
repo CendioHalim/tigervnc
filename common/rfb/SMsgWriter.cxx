@@ -52,7 +52,8 @@ SMsgWriter::SMsgWriter(ClientParams* client_, rdr::OutStream* os_)
     nRectsInUpdate(0), nRectsInHeader(0),
     needSetDesktopName(false), needCursor(false),
     needCursorPos(false), needLEDState(false),
-    needQEMUKeyEvent(false), needExtMouseButtonsEvent(false)
+    needQEMUKeyEvent(false), needExtMouseButtonsEvent(false),
+    needExtClipboardMimeEvent(false)
 {
 }
 
@@ -314,6 +315,16 @@ void SMsgWriter::writeExtendedMouseButtonsSupport()
   needExtMouseButtonsEvent = true;
 }
 
+void SMsgWriter::writeExtendedClipboardMimeSupport()
+{
+  vlog.debug("Checking if client supports extended clipboard mime");
+  if (!client->supportsEncoding(pseudoEncodingClipboardMime))
+    throw std::logic_error("Client does not support Extended Clipboard Mime");
+
+  vlog.debug("Client supports extended clipboard mime");
+  needExtClipboardMimeEvent = true;
+}
+
 bool SMsgWriter::needFakeUpdate()
 {
   if (needSetDesktopName)
@@ -327,6 +338,8 @@ bool SMsgWriter::needFakeUpdate()
   if (needQEMUKeyEvent)
     return true;
   if (needExtMouseButtonsEvent)
+    return true;
+  if (needExtClipboardMimeEvent)
     return true;
   if (needNoDataUpdate())
     return true;
@@ -377,6 +390,8 @@ void SMsgWriter::writeFramebufferUpdateStart(int nRects)
     if (needQEMUKeyEvent)
       nRects++;
     if (needExtMouseButtonsEvent)
+      nRects++;
+    if (needExtClipboardMimeEvent)
       nRects++;
   }
 
@@ -521,6 +536,11 @@ void SMsgWriter::writePseudoRects()
   if (needExtMouseButtonsEvent) {
     writeExtendedMouseButtonsRect();
     needExtMouseButtonsEvent = false;
+  }
+
+  if (needExtClipboardMimeEvent) {
+    writeExtendedClipboardMimeRect();
+    needExtClipboardMimeEvent = false;
   }
 }
 
@@ -767,4 +787,19 @@ void SMsgWriter::writeExtendedMouseButtonsRect()
   os->writeU16(0);
   os->writeU16(0);
   os->writeU32(pseudoEncodingExtendedMouseButtons);
+}
+
+void SMsgWriter::writeExtendedClipboardMimeRect()
+{
+  if (!client->supportsEncoding(pseudoEncodingClipboardMime))
+    throw std::logic_error("Client does not support extended clipboard mime events");
+  if (++nRectsInUpdate > nRectsInHeader && nRectsInHeader)
+    throw std::logic_error("SMsgWriter::writeExtendedClipboardMimeRect: nRects out of sync");
+
+  vlog.debug("===============================");
+  os->writeS16(0);
+  os->writeS16(0);
+  os->writeU16(0);
+  os->writeU16(0);
+  os->writeU32(pseudoEncodingClipboardMime);
 }

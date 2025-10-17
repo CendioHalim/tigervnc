@@ -362,7 +362,7 @@ void SConnection::setEncodings(int nEncodings, const int32_t* encodings)
 {
   int i;
   bool firstFence, firstContinuousUpdates, firstLEDState,
-       firstQEMUKeyEvent, firstExtMouseButtonsEvent;
+       firstQEMUKeyEvent, firstExtMouseButtonsEvent, firstExtClipboardMimeEvent;
 
   preferredEncoding = encodingRaw;
   for (i = 0;i < nEncodings;i++) {
@@ -377,6 +377,7 @@ void SConnection::setEncodings(int nEncodings, const int32_t* encodings)
   firstLEDState = !client.supportsLEDState();
   firstQEMUKeyEvent = !client.supportsEncoding(pseudoEncodingQEMUKeyEvent);
   firstExtMouseButtonsEvent = !client.supportsEncoding(pseudoEncodingExtendedMouseButtons);
+  firstExtClipboardMimeEvent = !client.supportsEncoding(pseudoEncodingClipboardMime);
 
   client.setEncodings(nEncodings, encodings);
 
@@ -392,6 +393,8 @@ void SConnection::setEncodings(int nEncodings, const int32_t* encodings)
     writer()->writeQEMUKeyEvent();
   if (client.supportsEncoding(pseudoEncodingExtendedMouseButtons) && firstExtMouseButtonsEvent)
     writer()->writeExtendedMouseButtonsSupport();
+  if (client.supportsEncoding(pseudoEncodingClipboardMime) && firstExtClipboardMimeEvent)
+    writer()->writeExtendedClipboardMimeSupport();
 
   if (client.supportsEncoding(pseudoEncodingExtendedClipboard)) {
     uint32_t sizes[] = { 0 };
@@ -530,6 +533,10 @@ void SConnection::supportsFence()
 }
 
 void SConnection::supportsContinuousUpdates()
+{
+}
+
+void SConnection::supportsClipboardMime()
 {
 }
 

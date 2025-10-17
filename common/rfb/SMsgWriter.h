@@ -95,6 +95,8 @@ namespace rfb {
     // let the client know we support extended mouse button support
     void writeExtendedMouseButtonsSupport();
 
+    void writeExtendedClipboardMimeSupport();
+
     // needFakeUpdate() returns true when an immediate update is needed in
     // order to flush out pseudo-rectangles to the client.
     bool needFakeUpdate();
@@ -151,6 +153,7 @@ namespace rfb {
     void writeLEDStateRect(uint8_t state);
     void writeQEMUKeyEventRect();
     void writeExtendedMouseButtonsRect();
+    void writeExtendedClipboardMimeRect();
 
     ClientParams* client;
     rdr::OutStream* os;
@@ -164,6 +167,7 @@ namespace rfb {
     bool needLEDState;
     bool needQEMUKeyEvent;
     bool needExtMouseButtonsEvent;
+    bool needExtClipboardMimeEvent;
 
     typedef struct {
       uint16_t reason, result;

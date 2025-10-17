@@ -104,6 +104,7 @@ namespace rfb {
     bool supportsFence() const;
     bool supportsContinuousUpdates() const;
     bool supportsExtendedMouseButtons() const;
+    bool supportsClipboardMime() const;
 
     int compressLevel;
     int qualityLevel;

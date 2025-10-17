@@ -182,6 +182,8 @@ namespace rfb {
     // this point if it is supported.
     virtual void supportsContinuousUpdates();
 
+    virtual void supportsClipboardMime();
+
     // supportsLEDState() is called the first time we detect that the
     // client supports the LED state extension. A LEDState message
     // should be sent back to the client to inform it of the current
