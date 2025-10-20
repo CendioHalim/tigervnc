@@ -62,6 +62,8 @@ public:
   void handleClipboardAnnounce(bool available);
   void handleClipboardData(const char* data);
 
+  void getClipboardMimeTypes(void *event);
+
   // Fl_Widget callback methods
 
   void draw() override;

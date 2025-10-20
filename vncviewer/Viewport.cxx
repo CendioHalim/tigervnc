@@ -79,6 +79,8 @@
 
 static core::LogWriter vlog("Viewport");
 
+static Atom targets_atom = 0;
+
 // Menu constants
 
 enum { ID_DISCONNECT, ID_FULLSCREEN, ID_MINIMIZE, ID_RESIZE,
@@ -113,6 +115,8 @@ Viewport::Viewport(int w, int h, CConn* cc_)
 
   // We need to intercept keyboard events early
   Fl::add_system_handler(handleSystemEvent, this);
+
+  targets_atom = XInternAtom(fl_display, "TARGETS", False);
 
   // FIXME: We should only disable this whilst we have keyboard focus,
   //        but we also need to keep it disabled when we lose focus to
@@ -430,7 +434,7 @@ int Viewport::handle(int event)
   int buttonMask, wheelMask;
 
   switch (event) {
-  case FL_PASTE:
+  case FL_PASTE: {
     if (!core::isValidUTF8(Fl::event_text(), Fl::event_length())) {
       vlog.error("Invalid UTF-8 sequence in system clipboard");
       // Reset the state as if we don't have any clipboard data at all
@@ -447,6 +451,44 @@ int Viewport::handle(int event)
     filtered = core::convertLF(Fl::event_text(), Fl::event_length());
 
     vlog.debug("Sending clipboard data (%d bytes)", (int)filtered.size());
+    vlog.debug("Clipboard type: %s", Fl::event_clipboard_type());
+
+    Atom actual_type_return;
+    int actual_format_return;
+    unsigned long nitems_return;
+    unsigned long bytes_after_return;
+    unsigned char *prop_data = nullptr;
+
+    int result = XGetWindowProperty(fl_display, fl_window, targets_atom,
+                                        0, 2048, False, XA_ATOM,
+                                        &actual_type_return, &actual_format_return,
+                                        &nitems_return, &bytes_after_return,
+                                        &prop_data);
+    vlog.debug("result: %d", result);
+
+    if (result == Success && prop_data) {
+      // We expect the data to be an array of Atoms.
+      if (actual_type_return == XA_ATOM && actual_format_return == 32) {
+        Atom *atoms = (Atom *)prop_data;
+        int num_atoms = nitems_return;
+
+        std::vector<std::string> target_names;
+        vlog.debug("Local clipboard has %d targets, announcing to server:",
+                   num_atoms);
+
+        for (int i = 0; i < num_atoms; i++) {
+          char *atom_name = XGetAtomName(fl_display, atoms[i]);
+          if (atom_name) {
+            vlog.debug("- %s", atom_name);
+            target_names.push_back(atom_name);
+            XFree(atom_name);
+          }
+        }
+      }
+
+      // IMPORTANT: Free the memory allocated by XGetWindowProperty.
+      XFree(prop_data);
+    }
 
     try {
       cc->sendClipboardData(filtered.c_str());
@@ -456,7 +498,7 @@ int Viewport::handle(int event)
     }
 
     return 1;
-
+  }
   case FL_ENTER:
     showCursor();
     // Yes, we would like some pointer events please!

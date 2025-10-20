@@ -23,6 +23,7 @@
 
 #include <functional>
 #include <string>
+#include <vector>
 #include <list>
 #include <map>
 
@@ -31,7 +32,17 @@
 namespace rfb { class VNCServer; }
 
 class PortalProxy;
-struct PendingData;
+struct ClipboardEntry {
+  std::string data;
+  std::string mimeType;
+};
+
+struct PendingData {
+  ClipboardEntry data;
+  uint32_t serial;
+  int fd;
+};
+
 
 class RemoteDesktop {
 public:
@@ -55,6 +66,7 @@ public:
   std::string getRestoreToken() const { return restoreToken; }
 
   void setSelection(const char* data);
+  void setSelection(const char* data, std::vector<const char*> mimeTypes[]);
 private:
   void selectionWrite(uint32_t serial);
   void selectionWriteDone(uint32_t serial, bool success);
@@ -99,7 +111,7 @@ private:
   bool clipboardEnabled;
   std::string sessionHandle;
   std::list<PendingData> pendingData;
-  std::string clientData;
+  std::vector<ClipboardEntry> clientData;
 
   uint32_t pipewireNodeId;
   PortalProxy* remoteDesktop;

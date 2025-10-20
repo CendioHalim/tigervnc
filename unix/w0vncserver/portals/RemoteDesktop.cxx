@@ -68,11 +68,7 @@ static const char* RESTORE_TOKEN_FILENAME =  "restoretoken";
 
 static core::LogWriter vlog("RemoteDesktop");
 
-struct PendingData {
-  std::string data;
-  uint32_t serial;
-  int fd;
-};
+
 
 static int getInputCode(uint32_t button)
 {
@@ -278,6 +274,7 @@ void RemoteDesktop::setSelection(const char* data)
   GVariant* mimeTypes;
   (void)data;
 
+  // FIXME: Add more common mimetypes?
   const char* types[] = {
     "text/uri-list",
     "UTF8_STRING",
@@ -285,9 +282,49 @@ void RemoteDesktop::setSelection(const char* data)
   };
 
   // clientData = data;
-  clientData = "file:///home/cendio/fusemount/in-memory-file.txt\r\n";
 
   mimeTypes = g_variant_new_strv(types,-1);
+
+  g_variant_builder_init(&optionsBuilder, G_VARIANT_TYPE_VARDICT);
+  g_variant_builder_add(&optionsBuilder, "{sv}", "mime_types", mimeTypes);
+  params = g_variant_new("(oa{sv})", sessionHandle.c_str(),
+                         &optionsBuilder);
+
+  clipboard->call("SetSelection", params);
+
+}
+
+void RemoteDesktop::setSelection(const char* data, std::vector<const char*> mimeTypes_[])
+{
+  GVariantBuilder optionsBuilder;
+  GVariant* params;
+  GVariant* mimeTypes;
+  (void)data;
+
+  // Check if last element in mimeTypes is nullptr
+
+  // clientData = data;
+  clientData.clear();
+
+  for (std::string mime : mimeTypes_[0]) {
+    ClipboardEntry entry;
+
+    entry.mimeType = mime;
+
+    if (mime == "text/uri-list") {
+      entry.data = "file:///home/cendio/fusemount/in-memory-file.txt\r\n";
+    } else if ("UTF8_STRING") {
+      entry.data = "file:///home/cendio/fusemount/in-memory-file.txt\r\n";
+    } else {
+      vlog.error("Unknown mime_type: %s", mime.c_str());
+      entry.data = data;
+    }
+
+    clientData.push_back(entry);
+  };
+
+  mimeTypes_->push_back(nullptr);
+  mimeTypes = g_variant_new_strv(mimeTypes_->data(),-1);
 
   g_variant_builder_init(&optionsBuilder, G_VARIANT_TYPE_VARDICT);
   g_variant_builder_add(&optionsBuilder, "{sv}", "mime_types", mimeTypes);
@@ -673,7 +710,7 @@ void RemoteDesktop::handleSelectionWrite(GObject* proxy,
   PendingData pending = pendingData.front();
   pendingData.pop_front();
 
-  if (write(fd, pending.data.c_str(), pending.data.length() + 1) < 0) {
+  if (write(fd, pending.data.data.c_str(), pending.data.data.length() + 1) < 0) {
     vlog.error("Clipboard write to fd failed: %s", strerror(errno));
     if (close(fd) != 0)
       vlog.error("Failed to close fd: %s", strerror(errno));
@@ -713,7 +750,7 @@ void RemoteDesktop::handleSelectionTransfer(GVariant* parameters)
   // }
 
   PendingData pending = PendingData();
-  pending.data = clientData;
+  pending.data = clientData[0];
   pending.serial = serial;
   pending.fd = -1;
   pendingData.push_back(pending);
