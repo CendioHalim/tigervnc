@@ -111,6 +111,9 @@ bool SMsgReader::readMsg()
   case msgTypeQEMUClientMessage:
     ret = readQEMUMessage();
     break;
+  case msgTypeClientMimeType:
+    ret = readClipboardMimeType();
+    break;
   default:
     vlog.error("Unknown message type %d", currentMsgType);
     throw protocol_error("Unknown message type");
@@ -515,5 +518,38 @@ bool SMsgReader::readQEMUKeyEvent()
     return true;
   }
   handler->keyEvent(keysym, keycode, down);
+  return true;
+}
+
+bool SMsgReader::readClipboardMimeType()
+{
+  size_t mimeTypeLen;
+  size_t dataLen;
+
+  if (!is->hasData(4 + 4))
+    return false;
+
+  mimeTypeLen = is->readU32();
+  dataLen = is->readU32();
+
+  vlog.debug("Received clipboard mime type (%d bytes)", (int)mimeTypeLen);
+  vlog.debug("Received clipboard data (%d bytes)", (int)dataLen);
+
+  if (!is->hasData(mimeTypeLen + dataLen)) {
+    vlog.error("Clipboard data too long (%zu bytes) - ignoring", mimeTypeLen + dataLen);
+    return false;
+  }
+
+  std::string mimeType;
+  mimeType.resize(mimeTypeLen);
+  is->readBytes((uint8_t*)mimeType.data(), mimeTypeLen);
+
+  std::string data;
+  data.resize(dataLen);
+  is->readBytes((uint8_t*)data.data(), dataLen);
+
+  vlog.debug("Successfully received clipboard mime type '%s' (%d bytes)",
+             mimeType.c_str(), (int)dataLen);
+
   return true;
 }

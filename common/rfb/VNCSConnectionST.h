@@ -140,6 +140,7 @@ namespace rfb {
     void handleClipboardRequest() override;
     void handleClipboardAnnounce(bool available) override;
     void handleClipboardData(const char* data) override;
+    void handleClipboardMimeType(const char* mimeType, void* data, size_t len) override;
     void supportsLocalCursor() override;
     void supportsFence() override;
     void supportsContinuousUpdates() override;

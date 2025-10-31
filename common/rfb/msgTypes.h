@@ -42,6 +42,8 @@ namespace rfb {
 
   const int msgTypeEnableContinuousUpdates = 150;
 
+  const int msgTypeClientMimeType = 151;
+
   const int msgTypeClientFence = 248;
 
   const int msgTypeSetDesktopSize = 251;
