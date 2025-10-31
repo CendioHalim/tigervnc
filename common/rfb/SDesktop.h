@@ -39,6 +39,7 @@
 #define __RFB_SDESKTOP_H__
 
 #include <stdint.h>
+#include <stddef.h>
 
 #include <rfb/screenTypes.h>
 
@@ -127,6 +128,8 @@ namespace rfb {
     // when the client received the request.
     virtual void handleClipboardData(const char* /*data*/) {}
 
+    virtual void handleClipboardMimeType(const char * /*mimeType*/,
+                                         void * /*data*/, size_t /*dataLen*/) {}
   };
 
 };

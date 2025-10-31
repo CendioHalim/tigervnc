@@ -524,32 +524,33 @@ bool SMsgReader::readQEMUKeyEvent()
 bool SMsgReader::readClipboardMimeType()
 {
   size_t mimeTypeLen;
-  size_t dataLen;
+  size_t payloadLen;
+  std::string mimeType;
+  void* payload;
 
   if (!is->hasData(4 + 4))
     return false;
 
   mimeTypeLen = is->readU32();
-  dataLen = is->readU32();
+  payloadLen = is->readU32();
 
   vlog.debug("Received clipboard mime type (%d bytes)", (int)mimeTypeLen);
-  vlog.debug("Received clipboard data (%d bytes)", (int)dataLen);
+  vlog.debug("Received clipboard data (%d bytes)", (int)payloadLen);
 
-  if (!is->hasData(mimeTypeLen + dataLen)) {
-    vlog.error("Clipboard data too long (%zu bytes) - ignoring", mimeTypeLen + dataLen);
+  if (!is->hasData(mimeTypeLen + payloadLen)) {
+    vlog.error("Clipboard data too long (%zu bytes) - ignoring", mimeTypeLen + payloadLen);
     return false;
   }
 
-  std::string mimeType;
   mimeType.resize(mimeTypeLen);
   is->readBytes((uint8_t*)mimeType.data(), mimeTypeLen);
 
-  std::string data;
-  data.resize(dataLen);
-  is->readBytes((uint8_t*)data.data(), dataLen);
+  payload = malloc(payloadLen);
+  is->readBytes((uint8_t*)payload.data(), payloadLen);
 
   vlog.debug("Successfully received clipboard mime type '%s' (%d bytes)",
-             mimeType.c_str(), (int)dataLen);
+             mimeType.c_str(), (int)payloadLen);
 
+  handler->handleClipboardMimeType(mimeType.c_str(), payload, payloadLen);
   return true;
 }

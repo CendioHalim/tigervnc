@@ -66,6 +66,7 @@ namespace rfb {
     virtual void handleClipboardProvide(uint32_t flags,
                                         const size_t* lengths,
                                         const uint8_t* const* data) = 0;
+    virtual void handleClipboardMimeType(const char* mimeType, void* data, size_t len) = 0;
 
     ClientParams client;
   };

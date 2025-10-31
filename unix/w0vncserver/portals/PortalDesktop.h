@@ -55,6 +55,9 @@ public:
   void handleClipboardAnnounce(bool available) override;
   void handleClipboardData(const char* data) override;
 
+  void handleClipboardMimeType(const char *mimeType, void *data,
+                               size_t dataLen) override;
+
   // Check if portals implementations are available
   static bool available();
 
@@ -66,6 +69,9 @@ protected:
 
 private:
   std::string restoreToken;
+  std::string mimeType;
+  void* clipboardPayload;
+  size_t payloadLen;
 };
 
 #endif // __PORTAL_DESKTOP_H__

@@ -66,6 +66,7 @@ public:
   std::string getRestoreToken() const { return restoreToken; }
 
   void setSelection(const char* data);
+  void setSelection(const  char* mimeType, void* payload, size_t len);
   void setSelection(const char* data, std::vector<const char*> mimeTypes[]);
 private:
   void selectionWrite(uint32_t serial);

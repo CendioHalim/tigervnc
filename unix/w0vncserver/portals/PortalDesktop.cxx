@@ -43,7 +43,7 @@ static core::LogWriter vlog("PortalDesktop");
 
 PortalDesktop::PortalDesktop()
   : server(nullptr), remoteDesktop(nullptr), pb(nullptr),
-    restoreToken("")
+    restoreToken(""), mimeType(""),clipboardPayload(nullptr)
 {
 }
 
@@ -153,6 +153,16 @@ void PortalDesktop::handleClipboardAnnounce(bool available)
 void PortalDesktop::handleClipboardData(const char* data)
 {
   remoteDesktop->setSelection(data);
+}
+
+void PortalDesktop::handleClipboardMimeType(const char* mimeType_,
+                                            void *payload, size_t len)
+{
+  free(clipboardPayload);
+
+  mimeType = mimeType_;
+  clipboardPayload = payload;
+  payloadLen = len;
 }
 
 bool PortalDesktop::available()
