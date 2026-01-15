@@ -16,6 +16,7 @@
  * USA.
  */
 
+#include <cstdint>
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -65,15 +66,16 @@ void PortalDesktop::start()
 {
   assert(!remoteDesktop);
 
-  std::function<void(int, uint32_t)> startPipewire = [this](int fd, uint32_t id) {
-    try {
-      pb = new PipeWirePixelBuffer(fd, id, server);
-    } catch (std::exception& e) {
-      server->closeClients(
-        core::format(_("Failed to create PipeWire pixel buffer: %s"),
-                     e.what()).c_str());
-    }
-  };
+  std::function<void(int, std::list<PipeWireStreamData>)> startPipewire =
+    [this](int fd, std::list<PipeWireStreamData> streams) {
+      try {
+        pb = new PipeWirePixelBuffer(fd, streams, server);
+      } catch (std::exception& e) {
+        server->closeClients(
+          core::format(_("Failed to create PipeWire pixel buffer: %s"),
+                       e.what()).c_str());
+      }
+    };
 
   // FIXME: If the session startup is canceled (e.g. the local user
   // denies the connection), we need to close the connections to all

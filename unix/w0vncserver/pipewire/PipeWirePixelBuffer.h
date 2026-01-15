@@ -19,6 +19,8 @@
 #ifndef __PIPEWIRE_PIXEL_BUFFER_H__
 #define __PIPEWIRE_PIXEL_BUFFER_H__
 
+#include <list>
+
 #include <rfb/PixelBuffer.h>
 #include <core/Region.h>
 #include <spa/buffer/buffer.h>
@@ -28,20 +30,19 @@
 namespace rfb { class VNCServer; class PixelFormat;}
 
 struct PipeWireCursor;
+struct PipeWireStreamData;
 
-class PipeWirePixelBuffer : public rfb::ManagedPixelBuffer,
-                            public PipeWireStream {
+class PipeWirePixelBuffer : public rfb::ManagedPixelBuffer {
 public:
-  PipeWirePixelBuffer(int32_t pipewireFd, uint32_t pipewireId,
-                      rfb::VNCServer* server);
+  PipeWirePixelBuffer(int fd, std::list<PipeWireStreamData> streams, rfb::VNCServer* server);
   ~PipeWirePixelBuffer();
 
 private:
-  virtual void processBuffer(pw_buffer* buffer) override;
-  virtual void setParameters(int width, int height, rfb::PixelFormat pf) override;
-  virtual void stopped() override;
+  friend PipeWireStream;
+  void processBuffer(pw_buffer* buffer);
+  void setParameters(int width, int height, rfb::PixelFormat pf);
+  void stopped();
 
-protected:
   void processFrame(spa_buffer* buffer);
   void processCursor(spa_buffer* buffer);
   void processDamage(spa_buffer* buffer);
@@ -54,6 +55,10 @@ protected:
 
 private:
   rfb::VNCServer* server;
+  std::list<PipeWireStream*> streams;
+  PipeWireSource* source;
+  pw_core* core;
+  pw_context* context;
   rfb::PixelFormat pipewirePixelFormat;
   core::Region accumulatedDamage;
   PipeWireCursor* cursor;
