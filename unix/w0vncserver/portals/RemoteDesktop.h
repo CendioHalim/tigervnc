@@ -23,6 +23,7 @@
 
 #include <functional>
 #include <string>
+#include <list>
 
 #include <gio/gio.h>
 
@@ -30,10 +31,21 @@ namespace rfb { class VNCServer; }
 
 class PortalProxy;
 
+struct PipeWireStreamData {
+  uint32_t pwNodeID;
+  const char* id;
+  uint32_t width;
+  uint32_t height;
+  uint32_t x;
+  uint32_t y;
+  uint32_t sourceType;
+  const char* mappingId;
+};
+
 class RemoteDesktop {
 public:
   RemoteDesktop(std::string restoreToken,
-                std::function<void(int fd, uint32_t nodeId)> startPipewireCb,
+                std::function<void(int, std::list<PipeWireStreamData>)> startPipewireCb,
                 std::function<void(const char*)> cancelStartCb);
   ~RemoteDesktop();
 
@@ -72,6 +84,7 @@ private:
 
   // Parses ScreenCast streams. Returns false on error
   bool parseStreams(GVariant* streams);
+  PipeWireStreamData parseStream(GVariant* stream);
 
   // Loads the restore token, returns false on error
   bool loadRestoreToken();
@@ -92,8 +105,9 @@ private:
   PortalProxy* session;
 
   std::string restoreToken;
+  std::list<PipeWireStreamData> pwStreams;
 
-  std::function<void(int fd, uint32_t nodeId)> startPipewireCb;
+  std::function<void(int fd, std::list<PipeWireStreamData>)> startPipewireCb;
   std::function<void(const char* reason)> cancelStartCb;
 };
 

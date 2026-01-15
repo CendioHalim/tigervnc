@@ -87,7 +87,7 @@ static int getInputCode(uint32_t button)
 }
 
 RemoteDesktop::RemoteDesktop(std::string restoreToken_,
-                             std::function<void(int fd, uint32_t nodeId)>
+                             std::function<void(int, std::list<PipeWireStreamData>)>
                                startPipewireCb_,
                              std::function<void(const char*)>
                                cancelStartCb_)
@@ -318,7 +318,7 @@ void RemoteDesktop::selectSources()
   g_variant_builder_add(&optionsBuilder, "{sv}", "cursor_mode",
                         g_variant_new_uint32(cursorMode));
   g_variant_builder_add(&optionsBuilder, "{sv}", "multiple",
-                        g_variant_new_boolean(false));
+                        g_variant_new_boolean(true));
 
   g_variant_builder_add(&optionsBuilder, "{sv}", "handle_token",
                         g_variant_new_string(requestHandleToken.c_str()));
@@ -424,6 +424,10 @@ void RemoteDesktop::handleStart(GVariant* parameters)
 
   assert(!sessionStarted);
 
+  char* debug = g_variant_print(parameters, true);
+  vlog.error("parameters: %s", debug);
+  free(debug);
+
   if (!g_variant_is_of_type(parameters, G_VARIANT_TYPE("(ua{sv})"))) {
     fatal_error("%s", core::format("RemoteDesktop::handleStart: Unexpected parameters %s",
                                    g_variant_get_type_string(parameters)).c_str());
@@ -523,7 +527,7 @@ void RemoteDesktop::handleOpenPipewireRemote(GObject *proxy,
   }
 
   // FIXME: Handle multiple streams
-  startPipewireCb(fd, pipewireNodeId);
+  startPipewireCb(fd, pwStreams);
 }
 
 bool RemoteDesktop::parseStreams(GVariant* streams)
@@ -531,6 +535,11 @@ bool RemoteDesktop::parseStreams(GVariant* streams)
   GVariantIter iter;
   GVariant* stream;
   int n_streams;
+  char* debug;
+
+  debug = g_variant_print(streams, true);
+  vlog.debug("streams: %s", debug);
+  free(debug);
 
   g_variant_iter_init(&iter, streams);
   n_streams = g_variant_iter_n_children(&iter);
@@ -545,12 +554,81 @@ bool RemoteDesktop::parseStreams(GVariant* streams)
                n_streams);
   }
 
-  stream = g_variant_get_child_value(streams, 0);
-  g_variant_get_child(stream, 0, "u", &pipewireNodeId);
+  for (int i = 0; i < n_streams; i++) {
+    PipeWireStreamData pd;
 
-  g_variant_unref(stream);
+    stream = g_variant_get_child_value(streams, i);
+    g_variant_get_child(stream, 0, "u", &pipewireNodeId);
+    pd = parseStream(stream);
+    if (!pd.width || !pd.height) {
+      vlog.error("Invalid stream - ignoring");
+    } else {
+      vlog.debug("Added stream: %s", pd.id);
+      pwStreams.push_back(pd);
+    }
+
+    g_variant_unref(stream);
+  }
+
 
   return true;
+}
+
+PipeWireStreamData RemoteDesktop::parseStream(GVariant* stream)
+{
+  PipeWireStreamData pd;
+  GVariant* properties;
+  char* id;
+  uint32_t sourceType;
+  int32_t x;
+  int32_t y;
+  int32_t width;
+  int32_t height;
+
+  char* debug;
+  debug = g_variant_print(stream, true);
+  vlog.debug("stream: %s", debug);
+  free(debug);
+
+  if (!g_variant_check_format_string(stream, "(ua{sv})", false)) {
+    vlog.error("Invalid stream format. Expected (ua{sv})");
+    return pd;
+  }
+
+  g_variant_get(stream, "(u@a{sv})", &pd.pwNodeID, &properties);
+
+  if (!properties) {
+    vlog.error("Failed to extract properties dictionary");
+    return pd;
+  }
+
+  if (g_variant_lookup(properties, "id", "&s", &id)) {
+    pd.id = id;
+  } else {
+    vlog.error("Property 'id' not found");
+  }
+
+  if (g_variant_lookup(properties, "position", "(ii)", &x, &y)) {
+    pd.x = x;
+    pd.y = y;
+  } else {
+    vlog.error("Property 'position' not found");
+  }
+
+  if (g_variant_lookup(properties, "size", "(ii)", &width, &height)) {
+    pd.width = width;
+    pd.height = height;
+  } else {
+    vlog.error("Property 'size' not found");
+  }
+
+  if (g_variant_lookup(properties, "source_type", "u", &sourceType)) {
+    pd.sourceType = sourceType;
+  } else {
+    vlog.error("Property 'source_type' not found");
+  }
+
+  return pd;
 }
 
 bool RemoteDesktop::loadRestoreToken()

@@ -23,6 +23,7 @@
 #include <assert.h>
 #include <stdint.h>
 
+ #include <stdexcept>
 #include <glib.h>
 #include <glib-object.h>
 
@@ -39,7 +40,9 @@
 #include <rfb/PixelFormat.h>
 
 #include "PipeWireStream.h"
+#include "PipeWireSource.h"
 #include "PipeWirePixelBuffer.h"
+#include "../portals/RemoteDesktop.h"
 
 struct PipeWireCursor {
   uint32_t w;
@@ -52,18 +55,45 @@ struct PipeWireCursor {
 
 static core::LogWriter vlog("PipewirePixelBuffer");
 
-PipeWirePixelBuffer::PipeWirePixelBuffer(int32_t pipewireFd,
-                                         uint32_t pipewireId,
+PipeWirePixelBuffer::PipeWirePixelBuffer(int fd, std::list<PipeWireStreamData> streamsData,
                                          rfb::VNCServer* server_)
-  : PipeWireStream(pipewireFd, pipewireId), server(server_),
-    lastSequence(0)
+  : server(server_), lastSequence(0)
 {
   cursor = new PipeWireCursor();
+  core::Region r;
+  uint8_t* dstBuffer;
+  int dstStride;
+
+  source = new PipeWireSource();
+
+  context = pw_context_new(source->getLoop(), nullptr, 0);
+  core = pw_context_connect_fd(context, fd, nullptr, 0);
+  if (!core)
+    throw std::runtime_error("Failed to connect to PipeWire FD");
+
+  for (const PipeWireStreamData& s : streamsData) {
+    PipeWireStream* stream;
+
+    stream = new PipeWireStream(core, s.pwNodeID, this);
+
+    core::Point tl{static_cast<int>(s.x), static_cast<int>(s.y)};
+    core::Point br{static_cast<int>(tl.x + s.width), static_cast<int>(tl.y + s.height)};
+    r.assign_union({{tl, br}});
+    streams.push_back(stream);
+  }
+
+  setSize(r.get_bounding_rect().width(), r.get_bounding_rect().height());
+
+  // Clear the buffer initially.
+  dstBuffer = getBufferRW(getRect(), &dstStride);
+  memset(dstBuffer, 0, dstStride * height());
 }
 
 PipeWirePixelBuffer::~PipeWirePixelBuffer()
 {
   delete cursor;
+  for (PipeWireStream* s : streams)
+    delete s;
 }
 
 void PipeWirePixelBuffer::processBuffer(pw_buffer* buffer)
@@ -80,8 +110,10 @@ void PipeWirePixelBuffer::processBuffer(pw_buffer* buffer)
 void PipeWirePixelBuffer::setParameters(int width, int height,
                                         rfb::PixelFormat pf)
 {
-  setSize(width, height);
-  setPF(pf);
+  // setSize(width, height);
+  // setPF(pf);
+  (void)width;
+  (void)height;
   pipewirePixelFormat = pf;
   server->setPixelBuffer(this);
 }
@@ -104,10 +136,10 @@ void PipeWirePixelBuffer::processFrame(spa_buffer* buffer)
     return;
 
   // Check size
-  if (chunk->size != (uint32_t) (width() * height() * (pipewirePixelFormat.bpp / 8))) {
-    vlog.error("Invalid chunk size: %d", chunk->size);
-    return;
-  }
+  // if (chunk->size != (uint32_t) (width() * height() * (pipewirePixelFormat.bpp / 8))) {
+  //   vlog.error("Invalid chunk size: %d", chunk->size);
+  //   return;
+  // }
 
   header = (spa_meta_header*)spa_buffer_find_meta_data(buffer,
                                                        SPA_META_Header,

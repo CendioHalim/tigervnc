@@ -19,17 +19,23 @@
 #ifndef __PIPEWIRE_STREAM_H__
 #define __PIPEWIRE_STREAM_H__
 
+#include <pipewire/context.h>
 #include <stdint.h>
+
+#include <list>
 
 #include <pipewire/stream.h>
 
 namespace rfb { class PixelFormat; }
 
 class PipeWireSource;
+class PipeWirePixelBuffer;
+struct PipeWireStreamData;
+struct StreamContext;
 
 class PipeWireStream {
 public:
-  PipeWireStream(int pipeWireFd, int nodeId);
+  PipeWireStream(pw_core* core, int nodeId, PipeWirePixelBuffer* pb);
   virtual ~PipeWireStream();
 
 private:
@@ -41,19 +47,18 @@ private:
   void handleStreamParamChanged(uint32_t id, const spa_pod* param);
   void handleProcess();
 
-  virtual void setParameters(int width, int height, rfb::PixelFormat pf) = 0;
-  virtual void processBuffer(pw_buffer* buffer) = 0;
-
   rfb::PixelFormat convertPixelformat(int spaFormat);
 
 private:
+  PipeWirePixelBuffer* pb;
   int pipeWireFd;
-
-  PipeWireSource* source;
   pw_core* core;
-  pw_context* context;
   pw_stream* stream;
   spa_hook streamListener;
+  uint32_t width;
+  uint32_t height;
+  uint32_t x;
+  uint32_t y;
   static const pw_stream_events streamEventsHandler;
 };
 

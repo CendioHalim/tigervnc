@@ -31,9 +31,11 @@
 
 #include "../w0vncserver.h"
 #include "PipeWireSource.h"
+#include "PipeWirePixelBuffer.h"
 #include "PipeWireStream.h"
 
 static core::LogWriter vlog("PipeWireStream");
+
 
 const pw_stream_events PipeWireStream::streamEventsHandler {
   .version = PW_VERSION_STREAM_EVENTS,
@@ -61,16 +63,9 @@ const pw_stream_events PipeWireStream::streamEventsHandler {
 #endif
 };
 
-PipeWireStream::PipeWireStream(int pipeWireFd_, int nodeId)
-  : pipeWireFd(pipeWireFd_)
+PipeWireStream::PipeWireStream(pw_core* core_, int nodeId, PipeWirePixelBuffer* pb_)
+    : pb(pb_), core(core_)
 {
-  source = new PipeWireSource();
-
-  context = pw_context_new(source->getLoop(), nullptr, 0);
-  core = pw_context_connect_fd(context, pipeWireFd_, nullptr, 0);
-  if (!core)
-    throw std::runtime_error("Failed to connect to PipeWire FD");
-
   start(nodeId);
 }
 
@@ -79,16 +74,9 @@ PipeWireStream::~PipeWireStream()
   pw_stream_disconnect(stream);
   // Iterate the loop once after disconnect to ensure proper cleanup.
   // Without this, we saw issues when re-initializing PipeWire
-  pw_loop_iterate(source->getLoop(), 0);
+  // pw_loop_iterate(source->getLoop(), 0);
 
   pw_stream_destroy(stream);
-
-  pw_core_disconnect(core);
-  pw_context_destroy(context);
-
-  close(pipeWireFd);
-
-  delete source;
 }
 
 void PipeWireStream::start(int nodeId)
@@ -222,7 +210,7 @@ void PipeWireStream::handleStreamParamChanged(uint32_t id,
     return;
   }
 
-  setParameters(fbSize.width, fbSize.height, pf);
+  pb->setParameters(fbSize.width, fbSize.height, pf);
 
   nParams = 0;
 
@@ -282,7 +270,7 @@ void PipeWireStream::handleProcess()
     return;
   }
 
-  processBuffer(buffer);
+  pb->processBuffer(buffer);
 
   pw_stream_queue_buffer(stream, buffer);
 }
