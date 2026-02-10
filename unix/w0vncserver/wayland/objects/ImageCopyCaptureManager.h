@@ -33,13 +33,18 @@ namespace wayland {
 
   class ImageCaptureSource;
   class ImageCopyCaptureSession;
+  class ImageCopyCaptureCursorSession;
 
   class ImageCopyCaptureManager : public Object {
   public:
     ImageCopyCaptureManager(Display* display,
                             ImageCaptureSource* source,
+                            Seat* seat,
                             std::function<void(uint8_t*, core::Region, uint32_t)>
                               bufferEventCb,
+                            std::function<void(int, int, const core::Point&, uint32_t, const uint8_t*)>
+                              cursorImageCb,
+                            std::function<void(const core::Point&)> cursorPosCb,
                             std::function<void()> stoppedCb);
     ~ImageCopyCaptureManager();
 
@@ -50,7 +55,11 @@ namespace wayland {
     Display* display;
     ImageCaptureSource* source;
     ImageCopyCaptureSession* session;
+    Seat* seat;
+    ImageCopyCaptureCursorSession* cursorSession;
     std::function<void(uint8_t*, core::Region, uint32_t)> bufferEventCb;
+    std::function<void(int, int, const core::Point&, uint32_t, const uint8_t*)> cursorImageCb;
+    std::function<void(const core::Point&)> cursorPosCb;
     std::function<void()> stoppedCb;
   };
 
