@@ -16,9 +16,12 @@
  * USA.
  */
 
+#include <stdexcept>
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
+
+#include <assert.h>
 
 #include <wlr-output-management-unstable-v1.h>
 
@@ -48,6 +51,7 @@ const zwlr_output_mode_v1_listener OutputMode::listener = {
   },
   .finished = [](void* data, zwlr_output_mode_v1*) {
     OutputMode* mode = static_cast<OutputMode*>(data);
+    // FIXME: Signal that this object should be destroyed
     mode->finished = true;
   },
 };
@@ -56,8 +60,7 @@ OutputMode::OutputMode(zwlr_output_mode_v1* mode_)
   : mode(mode_), width(0), height(0), refresh(0), preferred(false),
     finished(false)
 {
-  if (mode)
-    zwlr_output_mode_v1_add_listener(mode, &listener, this);
+  zwlr_output_mode_v1_add_listener(mode, &listener, this);
 }
 
 OutputMode::~OutputMode()
@@ -69,18 +72,19 @@ OutputMode::~OutputMode()
 const zwlr_output_head_v1_listener OutputHead::listener = {
   .name = [](void* data, zwlr_output_head_v1*, const char* name) {
     OutputHead* head = static_cast<OutputHead*>(data);
-    head->name = name ? name : "";
+    // FIXME: Use this name to match the output with a wl_output. They
+    // are guaranteed to match. Same with description.
+    head->name = name;
   },
   .description = [](void* data, zwlr_output_head_v1*, const char* description) {
     OutputHead* head = static_cast<OutputHead*>(data);
-    head->description = description ? description : "";
+    head->description = description;
   },
   .physical_size = [](void* data, zwlr_output_head_v1*, int32_t width,
                       int32_t height) {
     OutputHead* head = static_cast<OutputHead*>(data);
     head->physicalWidth = width;
     head->physicalHeight = height;
-    head->hasPhysicalSize = true;
   },
   .mode = [](void* data, zwlr_output_head_v1*, zwlr_output_mode_v1* mode) {
     OutputHead* head = static_cast<OutputHead*>(data);
@@ -94,6 +98,8 @@ const zwlr_output_head_v1_listener OutputHead::listener = {
   .current_mode = [](void* data, zwlr_output_head_v1*, zwlr_output_mode_v1* mode) {
     OutputHead* head = static_cast<OutputHead*>(data);
     head->currentMode = nullptr;
+    // FIXME: Check if we need/should wrap OutputMode in its own class
+    // If not, we don't need this loop.
     for (OutputMode* entry : head->modes) {
       if (entry->getMode() == mode) {
         head->currentMode = entry;
@@ -116,19 +122,20 @@ const zwlr_output_head_v1_listener OutputHead::listener = {
   },
   .finished = [](void* data, zwlr_output_head_v1*) {
     OutputHead* head = static_cast<OutputHead*>(data);
+    // FIXME: This means we should destroy the head. Signal this somehow
     head->finished = true;
   },
   .make = [](void* data, zwlr_output_head_v1*, const char* make) {
     OutputHead* head = static_cast<OutputHead*>(data);
-    head->make = make ? make : "";
+    head->make = make;
   },
   .model = [](void* data, zwlr_output_head_v1*, const char* model) {
     OutputHead* head = static_cast<OutputHead*>(data);
-    head->model = model ? model : "";
+    head->model = model;
   },
   .serial_number = [](void* data, zwlr_output_head_v1*, const char* serial) {
     OutputHead* head = static_cast<OutputHead*>(data);
-    head->serialNumber = serial ? serial : "";
+    head->serialNumber = serial;
   },
   .adaptive_sync = [](void* data, zwlr_output_head_v1*, uint32_t state) {
     OutputHead* head = static_cast<OutputHead*>(data);
@@ -139,10 +146,9 @@ const zwlr_output_head_v1_listener OutputHead::listener = {
 OutputHead::OutputHead(zwlr_output_head_v1* head_)
   : head(head_), currentMode(nullptr), physicalWidth(0), physicalHeight(0),
     positionX(0), positionY(0), adaptiveSyncState(0), transform(0),
-    scale(0), hasPhysicalSize(false), enabled(false), finished(false)
+    scale(0), enabled(false), finished(false)
 {
-  if (head)
-    zwlr_output_head_v1_add_listener(head, &listener, this);
+  zwlr_output_head_v1_add_listener(head, &listener, this);
 }
 
 OutputHead::~OutputHead()
@@ -150,8 +156,7 @@ OutputHead::~OutputHead()
   for (OutputMode* mode : modes)
     delete mode;
 
-  if (head)
-    zwlr_output_head_v1_release(head);
+  zwlr_output_head_v1_release(head);
 }
 
 OutputConfigurationHead::OutputConfigurationHead(
@@ -162,54 +167,37 @@ OutputConfigurationHead::OutputConfigurationHead(
 
 OutputConfigurationHead::~OutputConfigurationHead()
 {
+  // FIXME: Cleanup
 }
 
 void OutputConfigurationHead::setMode(OutputMode* mode)
 {
-  if (!head || !mode)
-    return;
-
   zwlr_output_configuration_head_v1_set_mode(head, mode->getMode());
 }
 
 void OutputConfigurationHead::setCustomMode(int32_t width, int32_t height,
                                             int32_t refresh)
 {
-  if (!head)
-    return;
-
   zwlr_output_configuration_head_v1_set_custom_mode(head, width, height, refresh);
 }
 
 void OutputConfigurationHead::setPosition(int32_t x, int32_t y)
 {
-  if (!head)
-    return;
-
   zwlr_output_configuration_head_v1_set_position(head, x, y);
 }
 
 void OutputConfigurationHead::setTransform(int32_t transform)
 {
-  if (!head)
-    return;
-
   zwlr_output_configuration_head_v1_set_transform(head, transform);
 }
 
 void OutputConfigurationHead::setScale(wl_fixed_t scale)
 {
-  if (!head)
-    return;
-
   zwlr_output_configuration_head_v1_set_scale(head, scale);
 }
 
 void OutputConfigurationHead::setAdaptiveSync(uint32_t state)
 {
-  if (!head)
-    return;
-
   zwlr_output_configuration_head_v1_set_adaptive_sync(head, state);
 }
 
@@ -218,24 +206,34 @@ const zwlr_output_configuration_v1_listener OutputConfiguration::listener = {
     OutputConfiguration* config = static_cast<OutputConfiguration*>(data);
     config->status = OutputConfiguration::Succeeded;
     vlog.debug("Output configuration succeeded");
+    // FIXME: Signal to parent that we should be deleted
+    if (config->onComplete)
+      config->onComplete(config->status);
   },
   .failed = [](void* data, zwlr_output_configuration_v1*) {
     OutputConfiguration* config = static_cast<OutputConfiguration*>(data);
     config->status = OutputConfiguration::Failed;
     vlog.debug("Output configuration failed");
+    if (config->onComplete)
+      config->onComplete(config->status);
   },
   .cancelled = [](void* data, zwlr_output_configuration_v1*) {
     OutputConfiguration* config = static_cast<OutputConfiguration*>(data);
     config->status = OutputConfiguration::Cancelled;
     vlog.debug("Output configuration cancelled");
+    if (config->onComplete)
+      config->onComplete(config->status);
   },
 };
 
-OutputConfiguration::OutputConfiguration(zwlr_output_configuration_v1* config_)
-  : config(config_), status(Pending)
+OutputConfiguration::OutputConfiguration(zwlr_output_manager_v1* manager, uint32_t serial)
+  : config(nullptr), status(Pending)
 {
-  if (config)
-    zwlr_output_configuration_v1_add_listener(config, &listener, this);
+  config = zwlr_output_manager_v1_create_configuration(manager, serial);
+  if (!config)
+    throw std::runtime_error("Failed to create output configuration");
+
+  zwlr_output_configuration_v1_add_listener(config, &listener, this);
 }
 
 OutputConfiguration::~OutputConfiguration()
@@ -243,48 +241,40 @@ OutputConfiguration::~OutputConfiguration()
   for (OutputConfigurationHead* head : heads)
     delete head;
 
-  if (config)
-    zwlr_output_configuration_v1_destroy(config);
+  zwlr_output_configuration_v1_destroy(config);
 }
 
 OutputConfigurationHead* OutputConfiguration::enableHead(OutputHead* head)
 {
-  zwlr_output_configuration_head_v1* configHead = nullptr;
+  zwlr_output_configuration_head_v1* configHead;
+  OutputConfigurationHead* configurationHead;
 
-  if (!config || !head)
-    return nullptr;
-
-  configHead = zwlr_output_configuration_v1_enable_head(config,
-                                                        head->getHead());
+  // FIXME: Move this to OutputConfigurationHead constructor
+  configHead = zwlr_output_configuration_v1_enable_head(config, head->getHead());
   if (!configHead)
-    return nullptr;
+    throw std::runtime_error("Failed to enable output head");
 
-  OutputConfigurationHead* headObj = new OutputConfigurationHead(configHead);
-  heads.push_back(headObj);
-  return headObj;
+  configurationHead = new OutputConfigurationHead(configHead);
+  heads.push_back(configurationHead);
+  return configurationHead;
 }
 
 void OutputConfiguration::disableHead(OutputHead* head)
 {
-  if (!config || !head)
-    return;
-
+  // FIXME: Signal that we should be deleted?
   zwlr_output_configuration_v1_disable_head(config, head->getHead());
 }
 
 void OutputConfiguration::apply()
 {
-  if (!config)
-    return;
-
+  // FIXME: This is where we should set status to Pending, no?
   zwlr_output_configuration_v1_apply(config);
 }
 
 void OutputConfiguration::test()
 {
-  if (!config)
-    return;
-
+  // FIXME: Should we do a test first, then a new OutputConfiguration to apply?
+  // Unclear how to use the protocol.
   zwlr_output_configuration_v1_test(config);
 }
 
@@ -301,6 +291,7 @@ const zwlr_output_manager_v1_listener OutputManager::listener = {
   },
   .finished = [](void* data, zwlr_output_manager_v1*) {
     OutputManager* manager = static_cast<OutputManager*>(data);
+    // FIXME: We probably want to signal that we should be destroyed.
     manager->manager = nullptr;
   },
 };
@@ -311,8 +302,9 @@ OutputManager::OutputManager(Display* display)
     manager(nullptr), lastSerial(0), ready(false)
 {
   manager = (zwlr_output_manager_v1*)boundObject;
-  if (manager)
-    zwlr_output_manager_v1_add_listener(manager, &listener, this);
+
+  zwlr_output_manager_v1_add_listener(manager, &listener, this);
+  display->roundtrip();
 }
 
 OutputManager::~OutputManager()
@@ -320,20 +312,10 @@ OutputManager::~OutputManager()
   for (OutputHead* head : heads)
     delete head;
 
-  if (manager)
-    zwlr_output_manager_v1_stop(manager);
+  zwlr_output_manager_v1_stop(manager);
 }
 
 OutputConfiguration* OutputManager::createConfiguration(uint32_t serial)
 {
-  zwlr_output_configuration_v1* config = nullptr;
-
-  if (!manager)
-    return nullptr;
-
-  config = zwlr_output_manager_v1_create_configuration(manager, serial);
-  if (!config)
-    return nullptr;
-
-  return new OutputConfiguration(config);
+    return new OutputConfiguration(manager, serial);
 }

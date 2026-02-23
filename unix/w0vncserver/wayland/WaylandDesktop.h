@@ -21,6 +21,7 @@
 
 #include <glib.h>
 #include <stdint.h>
+#include <memory>
 
 #include <rfb/SDesktop.h>
 
@@ -35,6 +36,8 @@ namespace wayland {
   class DataControl;
   class OutputManager;
 };
+
+struct ResizeState;
 
 class WaylandPixelBuffer;
 class GWaylandSource;
@@ -52,8 +55,7 @@ public:
                         bool down) override;
   virtual void pointerEvent(const core::Point& pos,
                             uint16_t buttonMask) override;
-  unsigned int setScreenLayout(int fb_width, int fb_height,
-                               const rfb::ScreenSet& layout) override;
+
   void queryConnection(network::Socket* sock,
                         const char* userName) override;
   void terminate() override;
@@ -70,6 +72,9 @@ public:
 
 private:
   void setLEDState(unsigned int state);
+  void startScreenLayoutAsync(int fb_width, int fb_height,
+                              const rfb::ScreenSet& layout,
+                              const std::shared_ptr<struct ResizeState>& state);
 
 protected:
   rfb::VNCServer* server;
@@ -78,6 +83,7 @@ private:
   uint16_t oldButtonMask;
   WaylandPixelBuffer* pb;
   GMainLoop* loop;
+  GMainContext* context;
   GWaylandSource* waylandSource;
   wayland::Display* display;
   wayland::Seat* seat;
@@ -86,5 +92,6 @@ private:
   wayland::VirtualKeyboard* virtualKeyboard;
   wayland::DataControl* dataControl;
   wayland::OutputManager* outputManager;
+  std::shared_ptr<ResizeState> pendingResize;
 };
 #endif // __WAYLAND_DESKTOP_H__

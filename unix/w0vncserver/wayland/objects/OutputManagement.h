@@ -23,6 +23,7 @@
 
 #include <string>
 #include <vector>
+#include <functional>
 
 #include <wayland-client-core.h>
 
@@ -90,14 +91,13 @@ namespace wayland {
     uint32_t adaptiveSyncState;
     int32_t transform;
     wl_fixed_t scale;
-    bool hasPhysicalSize;
     bool enabled;
     bool finished;
   };
 
   class OutputConfigurationHead {
   public:
-    OutputConfigurationHead(zwlr_output_configuration_head_v1* head_);
+    OutputConfigurationHead(zwlr_output_configuration_head_v1* head);
     ~OutputConfigurationHead();
 
     void setMode(OutputMode* mode);
@@ -120,7 +120,7 @@ namespace wayland {
       Cancelled
     };
 
-    OutputConfiguration(zwlr_output_configuration_v1* config_);
+    OutputConfiguration(zwlr_output_manager_v1* manager, uint32_t serial);
     ~OutputConfiguration();
 
     OutputConfigurationHead* enableHead(OutputHead* head);
@@ -128,6 +128,9 @@ namespace wayland {
     void apply();
     void test();
     Status getStatus() const { return status; }
+    void setCompletionCallback(std::function<void(Status)> callback) {
+      onComplete = std::move(callback);
+    }
 
   private:
     static const zwlr_output_configuration_v1_listener listener;
@@ -135,6 +138,7 @@ namespace wayland {
     zwlr_output_configuration_v1* config;
     std::vector<OutputConfigurationHead*> heads;
     Status status;
+    std::function<void(Status)> onComplete;
   };
 
   class OutputManager : public Object {
