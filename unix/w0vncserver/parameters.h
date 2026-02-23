@@ -30,5 +30,6 @@ extern core::StringParameter interface;
 extern core::BoolParameter rawKeyboard;
 extern core::BoolParameter setPrimary;
 extern core::BoolParameter sendPrimary;
+extern core::BoolParameter waylandOutputManagement;
 
 #endif // __W0VNCSERVER_PARAMETERS_H__

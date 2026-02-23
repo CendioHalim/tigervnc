@@ -54,6 +54,11 @@ core::BoolParameter
               "Send the primary as well as the selection clipboard",
               true);
 
+core::BoolParameter
+  waylandOutputManagement("WaylandOutputManagement",
+                          "Enable experimental Wayland output management "
+                          "for resizing", false);
+
 
 static const char* defaultDesktopName()
 {

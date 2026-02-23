@@ -33,6 +33,7 @@ namespace wayland {
   class VirtualPointer;
   class VirtualKeyboard;
   class DataControl;
+  class OutputManager;
 };
 
 class WaylandPixelBuffer;
@@ -51,6 +52,8 @@ public:
                         bool down) override;
   virtual void pointerEvent(const core::Point& pos,
                             uint16_t buttonMask) override;
+  unsigned int setScreenLayout(int fb_width, int fb_height,
+                               const rfb::ScreenSet& layout) override;
   void queryConnection(network::Socket* sock,
                         const char* userName) override;
   void terminate() override;
@@ -82,5 +85,6 @@ private:
   wayland::VirtualPointer* virtualPointer;
   wayland::VirtualKeyboard* virtualKeyboard;
   wayland::DataControl* dataControl;
+  wayland::OutputManager* outputManager;
 };
 #endif // __WAYLAND_DESKTOP_H__

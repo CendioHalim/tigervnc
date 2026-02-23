@@ -22,6 +22,7 @@ add_executable(w0vncserver
   wayland/objects/ShmPool.cxx
   wayland/objects/VirtualPointer.cxx
   wayland/objects/VirtualKeyboard.cxx
+  wayland/objects/OutputManagement.cxx
   wayland/objects/ScreencopyManager.cxx
   wayland/WaylandDesktop.cxx
   wayland/WaylandPixelBuffer.cxx
@@ -40,6 +41,7 @@ add_executable(w0vncserver-forget
 # Generate protocol headers
 set(GEN_WAYLAND_SRCS "")
 set(WAYLAND_PROTOCOLS
+  wlr-output-management-unstable-v1
   wlr-screencopy-unstable-v1
   wlr-virtual-pointer-unstable-v1
   virtual-keyboard-unstable-v1
