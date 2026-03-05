@@ -85,6 +85,7 @@ namespace rfb {
     void announceClipboardOrClose(bool available);
     void sendClipboardDataOrClose(const char* data);
     void desktopReadyOrClose();
+    void setDesktopSizeDoneOrClose(uint16_t result);
 
     // The following methods never throw exceptions
 
@@ -134,7 +135,7 @@ namespace rfb {
     void framebufferUpdateRequest(const core::Rect& r,
                                   bool incremental) override;
     void setDesktopSize(int fb_width, int fb_height,
-                        const ScreenSet& layout) override;
+                               const ScreenSet& layout) override;
     void fence(uint32_t flags, unsigned len,
                const uint8_t data[]) override;
     void enableContinuousUpdates(bool enable,
@@ -172,6 +173,7 @@ namespace rfb {
     void setDesktopName(const char *name);
     void setLEDState(unsigned int state);
     void desktopReady() override;
+    void setDesktopSizeDone(uint16_t result);
 
   private:
     network::Socket* sock;
