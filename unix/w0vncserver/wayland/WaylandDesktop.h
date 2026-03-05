@@ -37,8 +37,6 @@ namespace wayland {
   class OutputManager;
 };
 
-struct ResizeState;
-
 class WaylandPixelBuffer;
 class GWaylandSource;
 
@@ -73,8 +71,7 @@ public:
 private:
   void setLEDState(unsigned int state);
   void startScreenLayoutAsync(int fb_width, int fb_height,
-                              const rfb::ScreenSet& layout,
-                              const std::shared_ptr<struct ResizeState>& state);
+                              const rfb::ScreenSet& layout);
 
 protected:
   rfb::VNCServer* server;
@@ -92,6 +89,5 @@ private:
   wayland::VirtualKeyboard* virtualKeyboard;
   wayland::DataControl* dataControl;
   wayland::OutputManager* outputManager;
-  std::shared_ptr<ResizeState> pendingResize;
 };
 #endif // __WAYLAND_DESKTOP_H__

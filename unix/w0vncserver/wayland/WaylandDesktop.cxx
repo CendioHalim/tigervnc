@@ -16,6 +16,7 @@
  * USA.
  */
 
+#include "rfb/screenTypes.h"
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -53,48 +54,10 @@ static core::LogWriter vlog("WaylandDesktop");
 
 #define BUTTONS 9
 
-struct ResizeState {
-  GMutex mutex;
-  GCond cond;
-  bool done;
-  unsigned int result;
-  int fbWidth;
-  int fbHeight;
-  rfb::ScreenSet layout;
-  WaylandDesktop* self;
-  bool snapped;
-
-  ResizeState(int fbWidth_, int fbHeight_, const rfb::ScreenSet& layout_,
-              WaylandDesktop* self_)
-    : done(false), result(rfb::resultInvalid),
-      fbWidth(fbWidth_), fbHeight(fbHeight_), layout(layout_), self(self_),
-      snapped(false)
-  {
-    g_mutex_init(&mutex);
-    g_cond_init(&cond);
-  }
-
-  ~ResizeState()
-  {
-    g_cond_clear(&cond);
-    g_mutex_clear(&mutex);
-  }
-
-  void signal(unsigned int newResult)
-  {
-    g_mutex_lock(&mutex);
-    result = newResult;
-    done = true;
-    g_cond_signal(&cond);
-    g_mutex_unlock(&mutex);
-  }
-};
-
 WaylandDesktop::WaylandDesktop(GMainLoop* loop_)
   : server(nullptr), pb(nullptr), loop(loop_), waylandSource(nullptr),
     display(nullptr), seat(nullptr), virtualPointer(nullptr),
-    virtualKeyboard(nullptr), dataControl(nullptr), outputManager(nullptr),
-    pendingResize(nullptr)
+    virtualKeyboard(nullptr), dataControl(nullptr), outputManager(nullptr)
 {
   assert(available());
 
@@ -219,56 +182,66 @@ void WaylandDesktop::pointerEvent(const core::Point& pos, uint16_t buttonMask)
 }
 
 void WaylandDesktop::startScreenLayoutAsync(int fb_width, int fb_height,
-                                            const rfb::ScreenSet& layout,
-                                            const std::shared_ptr<ResizeState>& state)
+                                            const rfb::ScreenSet& layout)
 {
+  wayland::OutputConfiguration* config;
+  wayland::OutputConfigurationHead* headConfig;
+  bool snapped;
+
   vlog.debug("@ Wayland setScreenLayout request %dx%d, screens=%d",
              fb_width, fb_height, layout.num_screens());
 
-  if (!layout.validate(fb_width, fb_height))
-    return state->signal(rfb::resultInvalid);
+  if (!display->interfaceAvailable("zwlr_output_manager_v1")) {
+    vlog.error("zwlr-output-manager-v1 not available");
+    server->setScreenLayoutDone(rfb::resultNoResources);
+    return;
+  }
 
-  if (!display || !display->interfaceAvailable("zwlr_output_manager_v1"))
-    return state->signal(rfb::resultProhibited);
+  if (pb && pb->width() == fb_width && pb->height() == fb_height) {
+    server->setScreenLayoutDone((rfb::resultSuccess));
+    return;
+  }
 
-  if (pb && pb->width() == fb_width && pb->height() == fb_height)
-    return state->signal(rfb::resultSuccess);
-
-  if (layout.num_screens() != 1)
-    return state->signal(rfb::resultProhibited);
+  if (layout.num_screens() != 1) {
+    vlog.error("only single screen layout supported");
+    server->setScreenLayoutDone(rfb::resultNoResources);
+    return;
+  }
 
   if (!outputManager->isReady()) {
-
-    vlog.debug("@ Wayland setScreenLayout: deferring until manager ready");
-    if (pendingResize && pendingResize != state)
-      pendingResize->signal(rfb::resultNoResources);
-    pendingResize = state;
+    // FIXME: Not sure if this should be needed
     return;
   }
 
   const std::vector<wayland::OutputHead*>& heads = outputManager->getHeads();
-  vlog.debug("@ Wayland setScreenLayout: got %zu heads", heads.size());
-  if (heads.empty())
-    return state->signal(rfb::resultNoResources);
-
-  vlog.debug("@ Wayland setScreenLayout: create configuration with serial=%u",
-             outputManager->getLastSerial());
-  // FIXME: Match output with name/description instead of getting last serial
-  wayland::OutputConfiguration* config =
-    outputManager->createConfiguration(outputManager->getLastSerial());
-  if (!config)
-    return state->signal(rfb::resultNoResources);
-
-  const rfb::Screen& screen = *layout.begin();
-  vlog.debug("@ Wayland setScreenLayout: enable primary head");
-  wayland::OutputConfigurationHead* headConfig =
-    config->enableHead(heads.front());
-  if (!headConfig) {
-    delete config;
-    return state->signal(rfb::resultNoResources);
+  vlog.debug("got %zu heads", heads.size());
+  if (heads.empty()) {
+    server->setScreenLayoutDone(rfb::resultNoResources);
+    return;
   }
 
-  vlog.debug("@ Wayland setScreenLayout: set head pos %d,%d size %dx%d",
+  vlog.debug("create configuration with serial=%u", outputManager->getLastSerial());
+  // FIXME: Match output with name/description instead of getting last serial
+  try {
+    config = outputManager->createConfiguration(outputManager->getLastSerial());
+  } catch (std::exception& e) {
+    vlog.error("Failed to resize desktop: %s", e.what());
+    server->setScreenLayoutDone(rfb::resultNoResources);
+    return;
+  }
+
+  vlog.debug("enable primary head");
+  try {
+    headConfig = config->enableHead(heads.front());
+  } catch (std::exception& e) {
+    delete config;
+    vlog.error("Failed to resize desktop: %s", e.what());
+    server->setScreenLayoutDone(rfb::resultNoResources);
+    return;
+  }
+
+  const rfb::Screen& screen = *layout.begin();
+  vlog.debug("set head pos %d,%d size %dx%d",
              screen.dimensions.tl.x, screen.dimensions.tl.y,
              screen.dimensions.width(), screen.dimensions.height());
   headConfig->setPosition(screen.dimensions.tl.x, screen.dimensions.tl.y);
@@ -319,39 +292,41 @@ void WaylandDesktop::startScreenLayoutAsync(int fb_width, int fb_height,
 
   if (bestMode) {
     if (exactMatch) {
-      vlog.debug("@ Wayland setScreenLayout: using advertised mode %dx%d@%d",
+      vlog.debug("using advertised mode %dx%d@%d",
                  bestMode->getWidth(), bestMode->getHeight(),
                  bestMode->getRefresh());
-      state->snapped = false;
+      snapped = false;
     } else {
-      vlog.debug("@ Wayland setScreenLayout: snapping %dx%d -> %dx%d@%d",
+      vlog.debug("snapping %dx%d -> %dx%d@%d",
                  reqWidth, reqHeight,
                  bestMode->getWidth(), bestMode->getHeight(),
                  bestMode->getRefresh());
-      state->snapped = true;
+      snapped = true;
     }
     headConfig->setMode(bestMode);
   } else {
-    vlog.debug("@ Wayland setScreenLayout: no matching mode for %dx%d",
+    vlog.debug("no matching mode for %dx%d",
                reqWidth, reqHeight);
     delete config;
-    return state->signal(rfb::resultInvalid);
+    server->setScreenLayoutDone(rfb::resultInvalid);
+    return;
   }
 
-  config->setCompletionCallback([state, config](wayland::OutputConfiguration::Status status) {
+  // FIXME: This entire callback should be moved to the outputManager.finished callback
+  config->setCompletionCallback([this, snapped, config](wayland::OutputConfiguration::Status status) {
     unsigned int result = rfb::resultInvalid;
     if (status == wayland::OutputConfiguration::Succeeded) {
-      result = state->snapped ? rfb::resultInvalid : rfb::resultSuccess;
+      result = snapped ? rfb::resultInvalid : rfb::resultSuccess;
     } else if (status == wayland::OutputConfiguration::Pending) {
       result = rfb::resultNoResources;
     } else {
       result = rfb::resultInvalid;
     }
-    state->signal(result);
+    server->setScreenLayoutDone(result);
     delete config;
   });
 
-  vlog.debug("@ Wayland setScreenLayout: apply configuration");
+  vlog.debug("apply configuration");
   config->apply();
   wl_display_flush(display->getDisplay());
 }
@@ -385,11 +360,9 @@ void WaylandDesktop::setScreenLayout(int fb_width, int fb_height,
     return;
   }
 
-  auto state = std::make_shared<ResizeState>(fb_width, fb_height, layout, this);
-
   if (g_main_context_is_owner(context)) {
-    vlog.debug("@ Wayland setScreenLayout: called on main loop thread");
-    startScreenLayoutAsync(fb_width, fb_height, layout, state);
+    vlog.debug("called on main loop thread");
+    startScreenLayoutAsync(fb_width, fb_height, layout);
     server->setScreenLayoutDone(rfb::resultNoResources);
   }
 }
