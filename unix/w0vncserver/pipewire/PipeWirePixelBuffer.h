@@ -19,6 +19,7 @@
 #ifndef __PIPEWIRE_PIXEL_BUFFER_H__
 #define __PIPEWIRE_PIXEL_BUFFER_H__
 
+#include <cstdint>
 #include <list>
 
 #include <rfb/PixelBuffer.h>
@@ -39,13 +40,13 @@ public:
 
 private:
   friend PipeWireStream;
-  void processBuffer(pw_buffer* buffer);
+  void processBuffer(pw_buffer* buffer, uint32_t w, uint32_t h, uint32_t x, uint32_t y);
   void setParameters(int width, int height, rfb::PixelFormat pf);
   void stopped();
 
-  void processFrame(spa_buffer* buffer);
+  void processFrame(spa_buffer* buffer, uint32_t w, uint32_t h, uint32_t x, uint32_t y);
   void processCursor(spa_buffer* buffer);
-  void processDamage(spa_buffer* buffer);
+  void processDamage(spa_buffer* buffer, uint32_t x, uint32_t y);
 
   bool hasCursorData(spa_buffer* buffer);
 

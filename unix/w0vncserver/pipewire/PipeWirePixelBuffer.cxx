@@ -76,7 +76,7 @@ PipeWirePixelBuffer::PipeWirePixelBuffer(int fd, std::list<PipeWireStreamData> s
   for (const PipeWireStreamData& s : streamsData) {
     PipeWireStream* stream;
 
-    stream = new PipeWireStream(core, s.pwNodeID, this);
+    stream = new PipeWireStream(core, s, this);
 
     core::Point tl{static_cast<int>(s.x), static_cast<int>(s.y)};
     core::Point br{static_cast<int>(tl.x + s.width), static_cast<int>(tl.y + s.height)};
@@ -98,15 +98,17 @@ PipeWirePixelBuffer::~PipeWirePixelBuffer()
     delete s;
 }
 
-void PipeWirePixelBuffer::processBuffer(pw_buffer* buffer)
+void PipeWirePixelBuffer::processBuffer(pw_buffer *buffer, uint32_t w,
+                                        uint32_t h, uint32_t x,
+                                        uint32_t y)
 {
   spa_buffer* spaBuffer;
 
   spaBuffer = buffer->buffer;
 
-  processDamage(spaBuffer);
+  processDamage(spaBuffer, x, y);
   processCursor(spaBuffer);
-  processFrame(spaBuffer);
+  processFrame(spaBuffer, w, h, x, y);
 }
 
 void PipeWirePixelBuffer::setParameters(int width, int height,
@@ -116,6 +118,9 @@ void PipeWirePixelBuffer::setParameters(int width, int height,
   // setPF(pf);
   (void)width;
   (void)height;
+  // FIXME: loop over all streams and get the bounding rect here
+  // FIXME: Should probably re-structure this method / how things are
+  // structured...
   pipewirePixelFormat = pf;
   server->setPixelBuffer(this);
 }
@@ -125,7 +130,9 @@ void PipeWirePixelBuffer::stopped()
   server->closeClients(_("Remote desktop session stopped"));
 }
 
-void PipeWirePixelBuffer::processFrame(spa_buffer* buffer)
+void PipeWirePixelBuffer::processFrame(spa_buffer *buffer, uint32_t w,
+                                       uint32_t h, uint32_t x,
+                                       uint32_t y)
 {
   int srcStride;
   int dstStride;
@@ -161,10 +168,12 @@ void PipeWirePixelBuffer::processFrame(spa_buffer* buffer)
   frameDropped = (header->seq != lastSequence + 1);
   lastSequence = header->seq;
 
-  region = frameDropped ? getRect() : accumulatedDamage;
+  core::Rect dstRect{(int)x, (int)y, (int)(x+w), (int)(y+h)};
+
+  region = frameDropped ? dstRect : accumulatedDamage;
 
   // Clamp damage outside of framebuffer
-  region = region.intersect(getRect());
+  region = region.intersect(dstRect);
 
   srcBuffer = (uint8_t*)buffer->datas[0].data;
   srcStride = chunk->stride / (pipewirePixelFormat.bpp / 8);
@@ -172,11 +181,19 @@ void PipeWirePixelBuffer::processFrame(spa_buffer* buffer)
   region.get_rects(&rects);
   for (core::Rect &rect : rects) {
     uint8_t* dstBuffer;
+    int srcX;
+    int srcY;
+
+    // rect is in absolute framebuffer coordinates, but srcBuffer only
+    // holds this stream's own buffer whose local origin (0,0)
+    // corresponds to (x,y) in the framebuffer.
+    srcX = rect.tl.x - x;
+    srcY = rect.tl.y - y;
 
     dstBuffer = getBufferRW(getRect(), &dstStride);
     ret = pixman_blt((uint32_t*)srcBuffer, (uint32_t*)dstBuffer,
                      srcStride, dstStride, pipewirePixelFormat.bpp,
-                     getPF().bpp, rect.tl.x, rect.tl.y, rect.tl.x,
+                     getPF().bpp, srcX, srcY, rect.tl.x,
                      rect.tl.y, rect.width(), rect.height());
     commitBufferRW(rect);
 
@@ -184,7 +201,7 @@ void PipeWirePixelBuffer::processFrame(spa_buffer* buffer)
       uint8_t* damagedBuffer;
 
       damagedBuffer = &srcBuffer[(pipewirePixelFormat.bpp / 8) *
-                                (rect.tl.y * srcStride + rect.tl.x)];
+                                (srcY * srcStride + srcX)];
       imageRect(pipewirePixelFormat, rect, damagedBuffer, srcStride);
     }
   }
@@ -207,6 +224,9 @@ void PipeWirePixelBuffer::processCursor(spa_buffer* buffer)
                                                            sizeof(*cursorData));
   assert(cursorData);
 
+  // FIXME: Maybe we need x y offsets here.
+  // FIXME: Cursor can't go outside main window anwanys, at least on
+  // GNOME... We probably need libei for that
   cursor->x = cursorData->position.x;
   cursor->y = cursorData->position.y;
   cursor->hotspotX = cursorData->hotspot.x;
@@ -232,7 +252,8 @@ void PipeWirePixelBuffer::processCursor(spa_buffer* buffer)
             cursor->hotspotY, cursorBuffer);
 }
 
-void PipeWirePixelBuffer::processDamage(spa_buffer* buffer)
+void PipeWirePixelBuffer::processDamage(spa_buffer* buffer,
+                                        uint32_t x, uint32_t y)
 {
   spa_meta* damage;
   spa_meta_region* metaRegion;
@@ -244,10 +265,10 @@ void PipeWirePixelBuffer::processDamage(spa_buffer* buffer)
 
   spa_meta_for_each(metaRegion, damage) {
     if (!spa_meta_region_is_valid(metaRegion))
-      continue;
+      continue; // FIXME: This should break
 
-    core::Point tl{metaRegion->region.position.x,
-                   metaRegion->region.position.y};
+    core::Point tl{static_cast<int>(metaRegion->region.position.x + x),
+                   static_cast<int>(metaRegion->region.position.y + y)};
     core::Point br{static_cast<int>(tl.x + metaRegion->region.size.width),
                    static_cast<int>(tl.y + metaRegion->region.size.height)};
     accumulatedDamage.assign_union({{tl, br}});

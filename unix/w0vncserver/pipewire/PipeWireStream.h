@@ -35,8 +35,13 @@ struct StreamContext;
 
 class PipeWireStream {
 public:
-  PipeWireStream(pw_core* core, int nodeId, PipeWirePixelBuffer* pb);
+  PipeWireStream(pw_core* core, const PipeWireStreamData& data, PipeWirePixelBuffer* pb);
   virtual ~PipeWireStream();
+
+  uint32_t getWidth() const { return width; }
+  uint32_t getHeight() const { return height; }
+  uint32_t getX() const { return x; }
+  uint32_t getY() const { return y; }
 
 protected:
   virtual void stopped();

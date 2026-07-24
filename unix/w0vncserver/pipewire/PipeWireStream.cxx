@@ -36,6 +36,7 @@
 
 #include "../w0vncserver.h"
 #include "PipeWireSource.h"
+#include "../portals/RemoteDesktop.h"
 #include "PipeWirePixelBuffer.h"
 #include "PipeWireStream.h"
 
@@ -68,10 +69,13 @@ const pw_stream_events PipeWireStream::streamEventsHandler {
 #endif
 };
 
-PipeWireStream::PipeWireStream(pw_core* core_, int nodeId, PipeWirePixelBuffer* pb_)
-  : pb(pb_), active(true), core(core_)
+PipeWireStream::PipeWireStream(pw_core* core_,
+                               const PipeWireStreamData& data,
+                               PipeWirePixelBuffer* pb_)
+  : pb(pb_), active(true), core(core_), width(data.width),
+    height(data.height), x(data.x), y(data.y)
 {
-  start(nodeId);
+  start(data.pwNodeID);
 }
 
 PipeWireStream::~PipeWireStream()
@@ -288,7 +292,7 @@ void PipeWireStream::handleProcess()
     return;
   }
 
-  pb->processBuffer(buffer);
+  pb->processBuffer(buffer, width, height, x, y);
 
   pw_stream_queue_buffer(stream, buffer);
 }
