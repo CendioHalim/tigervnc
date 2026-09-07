@@ -155,6 +155,8 @@ namespace rfb {
 
     bool isShiftPressed();
 
+    int timeToIdleTimeout();
+
     // Congestion control
     void writeRTTPing();
     bool isCongested();

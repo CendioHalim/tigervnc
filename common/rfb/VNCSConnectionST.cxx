@@ -61,7 +61,7 @@ static const unsigned LOGIN_GRACE_TIME = 120;
 // Number of seconds allowed to flush a closing socket
 static const unsigned CLOSE_GRACE_TIME = 5;
 // Number of seconds the framebuffer will fade to black before
-// disconnecting client due to idle timeout
+// disconnecting the client or shutting down the server
 static const unsigned FADING_TIME = 10;
 
 static core::LogWriter vlog("VNCSConnST");
@@ -503,14 +503,15 @@ void VNCSConnectionST::queryConnection(const char* userName)
 
 void VNCSConnectionST::clientReady(bool shared)
 {
-  if (rfb::Server::idleTimeout) {
+  if (rfb::Server::idleTimeout)
     idleTimer.start(core::secsToMillis(rfb::Server::idleTimeout));
 
+  if (rfb::Server::idleTimeout || rfb::Server::maxIdleTime) {
     // Trigger the timer just as we are about to start fading
-    if (idleTimer.getRemainingMs() < FADING_TIME * 1000.0f)
+    if (timeToIdleTimeout() < FADING_TIME * 1000.0f)
       fadeTimer.start(1000 / rfb::Server::frameRate);
     else
-      fadeTimer.start(idleTimer.getRemainingMs() - FADING_TIME * 1000.0f);
+      fadeTimer.start(timeToIdleTimeout() - FADING_TIME * 1000.0f);
   }
 
   if (rfb::Server::alwaysShared || reverseConnection) shared = true;
@@ -878,7 +879,7 @@ void VNCSConnectionST::handleTimeout(core::Timer* t)
 
   if (t == &fadeTimer) {
     if (server->getPixelBuffer()) {
-      if (idleTimer.getRemainingMs() < FADING_TIME * 1000.0f) {
+      if (timeToIdleTimeout() < FADING_TIME * 1000.0f) {
         bool needsUpdate;
         float oldLevel;
         float newLevel;
@@ -891,7 +892,7 @@ void VNCSConnectionST::handleTimeout(core::Timer* t)
         }
 
         oldLevel = fadedBuffer->getFadeLevel();
-        newLevel = (idleTimer.getRemainingMs() / (FADING_TIME * 1000.0f));
+        newLevel = (timeToIdleTimeout() / (FADING_TIME * 1000.0f));
 
         // FIXME: Don't hardcode 255
         if ((int)(oldLevel*255) != (int)(newLevel*255)) {
@@ -918,10 +919,10 @@ void VNCSConnectionST::handleTimeout(core::Timer* t)
     // currently fading, we need to trigger the timer at the same
     // rate as the server framerate. This is to ensure that the fading
     // still occurs even if there is nothing happening on-screen.
-    if (idleTimer.getRemainingMs() < FADING_TIME * 1000.0f)
+    if (timeToIdleTimeout() < FADING_TIME * 1000.0f)
       fadeTimer.repeat(1000 / rfb::Server::frameRate);
     else
-      fadeTimer.repeat(idleTimer.getRemainingMs() - FADING_TIME * 1000.0f);
+      fadeTimer.repeat(timeToIdleTimeout() - FADING_TIME * 1000.0f);
   }
 
   if (t == &idleTimer)
@@ -940,6 +941,24 @@ bool VNCSConnectionST::isShiftPressed()
     }
 
   return false;
+}
+
+// Returns the number of milliseconds left until the closest idle timer
+// is about to trigger
+int VNCSConnectionST::timeToIdleTimeout()
+{
+  assert(rfb::Server::idleTimeout || rfb::Server::maxIdleTime);
+
+  if (!rfb::Server::maxIdleTime)
+    return idleTimer.getRemainingMs();
+
+  if (!rfb::Server::idleTimeout)
+    return server->getIdleRemainingMs();
+
+  if (idleTimer.getRemainingMs() < server->getIdleRemainingMs())
+    return idleTimer.getRemainingMs();
+
+  return server->getIdleRemainingMs();
 }
 
 void VNCSConnectionST::writeRTTPing()
@@ -1138,7 +1157,7 @@ void VNCSConnectionST::writeDataUpdate()
     float oldFadeLevel;
     float newFadeLevel;
 
-    newFadeLevel = (idleTimer.getRemainingMs() / (FADING_TIME * 1000.0f));
+    newFadeLevel = (timeToIdleTimeout() / (FADING_TIME * 1000.0f));
     oldFadeLevel = fadedBuffer->getFadeLevel();
 
     if ((int)(oldFadeLevel * 255) != (int)(newFadeLevel * 255)) {
