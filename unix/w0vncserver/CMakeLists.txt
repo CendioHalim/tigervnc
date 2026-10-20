@@ -39,6 +39,22 @@ add_executable(w0vncserver
   RFBTimerSource.cxx
 )
 
+add_executable(rd1-vncserver
+  dbus/NameWatcher.cxx
+  dbus/Proxy.cxx
+  dbus/RemoteDesktopManager.cxx
+  dbus/RemoteDesktopSession.cxx
+  dbus/VirtualMonitor.cxx
+  pipewire/PipeWirePixelBuffer.cxx
+  pipewire/PipeWireSource.cxx
+  pipewire/PipeWireStream.cxx
+  remotedesktop1.cxx
+  parameters.cxx
+  GSocketSource.cxx
+  HeadlessDesktop.cxx
+  RFBTimerSource.cxx
+)
+
 add_executable(w0vncserver-forget
   w0vncserver-forget.cxx
 )
@@ -96,6 +112,19 @@ target_link_libraries(w0vncserver PRIVATE ${PIPEWIRE_LIBRARIES})
 target_link_libraries(w0vncserver PRIVATE ${UUID_LIBRARIES})
 target_link_libraries(w0vncserver PRIVATE ${XKBCOMMON_LIBRARIES})
 target_link_libraries(w0vncserver PRIVATE ${WAYLANDCLIENT_LIBRARIES})
+
+target_include_directories(rd1-vncserver SYSTEM PUBLIC ${GLIB_INCLUDE_DIRS})
+target_include_directories(rd1-vncserver SYSTEM PUBLIC ${GIO_INCLUDE_DIRS})
+target_include_directories(rd1-vncserver SYSTEM PUBLIC ${GOBJECT_INCLUDE_DIRS})
+target_include_directories(rd1-vncserver SYSTEM PUBLIC ${PIXMAN_INCLUDE_DIRS})
+target_include_directories(rd1-vncserver SYSTEM PUBLIC ${PIPEWIRE_INCLUDE_DIRS})
+
+target_link_libraries(rd1-vncserver rfbserver rfb network rdr core)
+target_link_libraries(rd1-vncserver ${GLIB_LIBRARIES})
+target_link_libraries(rd1-vncserver ${GIO_LIBRARIES})
+target_link_libraries(rd1-vncserver ${GOBJECT_LIBRARIES})
+target_link_libraries(rd1-vncserver ${PIXMAN_LIBRARIES})
+target_link_libraries(rd1-vncserver ${PIPEWIRE_LIBRARIES})
 
 target_link_libraries(w0vncserver-forget PRIVATE core)
 
