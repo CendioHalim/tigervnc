@@ -1,4 +1,4 @@
-/* Copyright 2025 Adam Halim for Cendio AB
+/* Copyright 2025-2026 Adam Halim for Cendio AB
  *
  * This is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -22,9 +22,8 @@
 #include <functional>
 
 #include <wayland-client-protocol.h>
-#include <xkbcommon/xkbcommon.h>
 
-struct XkbContext;
+class XkbKeyboard;
 
 namespace wayland {
   class Display;
@@ -58,17 +57,15 @@ namespace wayland {
     void handleModifiers(uint32_t serial, uint32_t modsDepressed,
                          uint32_t modsLatched, uint32_t modsLocked,
                          uint32_t group);
-    void generateKeycodeMap();
-    void clearKeyMap();
 
   private:
     uint32_t keyboardFormat;
     int32_t keyboardFd;
     uint32_t keyboardSize;
     wl_keyboard* keyboard;
+    XkbKeyboard* xkbKeyboard;
     char* keyMap;
     static const wl_keyboard_listener listener;
-    XkbContext* context;
     // Called when the LED state has changed
     std::function<void(unsigned int)> setLEDstate;
     uint32_t codeMapQnumToKeyCode[256];

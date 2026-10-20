@@ -33,6 +33,7 @@ add_executable(w0vncserver
   qnum_to_xorgevdev.c
   xkb_to_qnum.c
   w0vncserver.cxx
+  XkbKeyboard.cxx
   parameters.cxx
   GSocketSource.cxx
   RFBTimerSource.cxx

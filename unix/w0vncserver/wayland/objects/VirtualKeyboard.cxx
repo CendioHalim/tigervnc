@@ -26,7 +26,7 @@
 #include <stdexcept>
 
 #include <virtual-keyboard-unstable-v1.h>
-#include <xkbcommon/xkbcommon-keysyms.h>
+#include <xkbcommon/xkbcommon.h>
 
 #include <core/LogWriter.h>
 #include <core/i18n.h>
