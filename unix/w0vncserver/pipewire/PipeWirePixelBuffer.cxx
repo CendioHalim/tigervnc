@@ -1,4 +1,4 @@
-/* Copyright 2025 Adam Halim for Cendio AB
+/* Copyright 2025-2026 Adam Halim for Cendio AB
  *
  * This is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -53,6 +53,14 @@ struct PipeWireCursor {
 };
 
 static core::LogWriter vlog("PipewirePixelBuffer");
+
+PipeWirePixelBuffer::PipeWirePixelBuffer(uint64_t serial,
+                                         rfb::VNCServer* server_)
+  : PipeWireStream(serial), server(server_),
+    lastSequence(0)
+{
+  cursor = new PipeWireCursor();
+}
 
 PipeWirePixelBuffer::PipeWirePixelBuffer(int32_t pipewireFd,
                                          uint32_t pipewireId,

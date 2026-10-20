@@ -1,4 +1,4 @@
-/* Copyright 2025 Adam Halim for Cendio AB
+/* Copyright 2025-2026 Adam Halim for Cendio AB
  *
  * This is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -65,6 +65,27 @@ const pw_stream_events PipeWireStream::streamEventsHandler {
   .trigger_done = nullptr
 #endif
 };
+
+PipeWireStream::PipeWireStream(uint64_t serial)
+  : pipeWireFd(0), active(true)
+{
+  source = new PipeWireSource();
+
+  context = pw_context_new(source->getLoop(), nullptr, 0);
+  if (!context) {
+    delete source;
+    throw std::runtime_error("Failed to create PipeWire context");
+  }
+
+  core = pw_context_connect(context, nullptr, 0);
+  if (!core) {
+    pw_context_destroy(context);
+    delete source;
+    throw std::runtime_error("Failed to connect to PipeWire FD");
+  }
+
+  start(serial);
+}
 
 PipeWireStream::PipeWireStream(int pipeWireFd_, int nodeId)
   : pipeWireFd(pipeWireFd_), active(true)
@@ -147,6 +168,58 @@ void PipeWireStream::start(int nodeId)
                                   &maxFramerate));
 
   if (pw_stream_connect(stream, PW_DIRECTION_INPUT, nodeId,
+                        (pw_stream_flags)(PW_STREAM_FLAG_AUTOCONNECT |
+                        PW_STREAM_FLAG_MAP_BUFFERS),
+                        params, 1) < 0) {
+    throw std::runtime_error(_("Failed to connect PipeWire stream"));
+  }
+}
+
+void PipeWireStream::start(uint64_t serial)
+{
+  uint8_t buffer[4096];
+  const spa_pod *params[1];
+  spa_pod_builder builder;
+  pw_properties* props;
+  char serialStr[32];
+
+  spa_pod_builder_init(&builder, buffer, sizeof(buffer));
+
+  snprintf(serialStr, sizeof(serialStr), "%lu", serial);
+  props = pw_properties_new(PW_KEY_MEDIA_TYPE, "Video",
+                            PW_KEY_MEDIA_CATEGORY, "Capture",
+                            PW_KEY_MEDIA_ROLE, "Screen",
+                            PW_KEY_TARGET_OBJECT, serialStr,
+                            nullptr);
+
+  stream = pw_stream_new(core, "w0vncserver", props);
+  if (!stream)
+    throw std::runtime_error(_("Failed to create PipeWire stream"));
+
+  pw_stream_add_listener(stream, &streamListener, &streamEventsHandler, this);
+
+  // FIXME: This is a bit ugly
+  spa_rectangle defaultVideoSize{1280,720};
+  spa_rectangle minVideoSize{1,1};
+  spa_rectangle maxVideoSize{4096,4096};
+  spa_fraction defaultFramerate{25,1};
+  spa_fraction minFramerate{0,1};
+  spa_fraction maxFramerate{60,1};
+
+  params[0] = (spa_pod *)spa_pod_builder_add_object(
+    &builder, SPA_TYPE_OBJECT_Format, SPA_PARAM_EnumFormat,
+    SPA_FORMAT_mediaType, SPA_POD_Id(SPA_MEDIA_TYPE_video),
+    SPA_FORMAT_mediaSubtype, SPA_POD_Id(SPA_MEDIA_SUBTYPE_raw),
+    SPA_FORMAT_VIDEO_format, SPA_POD_CHOICE_ENUM_Id(2, SPA_VIDEO_FORMAT_RGBx,
+                                                       SPA_VIDEO_FORMAT_BGRx),
+    SPA_FORMAT_VIDEO_size,
+    SPA_POD_CHOICE_RANGE_Rectangle(&defaultVideoSize, &minVideoSize,
+                                   &maxVideoSize),
+    SPA_FORMAT_VIDEO_framerate,
+    SPA_POD_CHOICE_RANGE_Fraction(&defaultFramerate, &minFramerate,
+                                  &maxFramerate));
+
+  if (pw_stream_connect(stream, PW_DIRECTION_INPUT, PW_ID_ANY,
                         (pw_stream_flags)(PW_STREAM_FLAG_AUTOCONNECT |
                         PW_STREAM_FLAG_MAP_BUFFERS),
                         params, 1) < 0) {

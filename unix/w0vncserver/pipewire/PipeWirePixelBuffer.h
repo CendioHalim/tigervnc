@@ -1,4 +1,4 @@
-/* Copyright 2025 Adam Halim for Cendio AB
+/* Copyright 2025-2026 Adam Halim for Cendio AB
  *
  * This is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -32,6 +32,9 @@ struct PipeWireCursor;
 class PipeWirePixelBuffer : public rfb::ManagedPixelBuffer,
                             public PipeWireStream {
 public:
+// Create a PipeWirePixelBuffer using a PipeWire serial
+  PipeWirePixelBuffer(uint64_t serial, rfb::VNCServer* server);
+  // Create a PipeWirePixelBuffer using a PipeWire FD
   PipeWirePixelBuffer(int32_t pipewireFd, uint32_t pipewireId,
                       rfb::VNCServer* server);
   ~PipeWirePixelBuffer();

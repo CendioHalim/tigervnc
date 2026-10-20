@@ -1,4 +1,4 @@
-/* Copyright 2025 Adam Halim for Cendio AB
+/* Copyright 2025-2026 Adam Halim for Cendio AB
  *
  * This is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -29,6 +29,9 @@ class PipeWireSource;
 
 class PipeWireStream {
 public:
+  // Create a PipeWireStream using a PipeWire serial
+  PipeWireStream(uint64_t serial);
+  // Create a PipeWireStream using a PipeWire FD
   PipeWireStream(int pipeWireFd, int nodeId);
   virtual ~PipeWireStream();
 
@@ -36,7 +39,10 @@ protected:
   virtual void stopped();
 
 private:
+  // Start PipeWireStream stream. Requires using a PipeWire FD
   void start(int nodeId);
+  // Start PipeWireStream stream using a PipeWire serial
+  void start(uint64_t serial);
 
   void handleStreamStateChanged(enum pw_stream_state old,
                                 enum pw_stream_state state,
