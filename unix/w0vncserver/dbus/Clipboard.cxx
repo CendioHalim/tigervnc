@@ -1,0 +1,559 @@
+/* Copyright 2025-2026 Adam Halim for Cendio AB
+ *
+ * This is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * This software is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this software; if not, write to the Free Software
+ * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307,
+ * USA.
+ */
+
+#ifdef HAVE_CONFIG_H
+#include <config.h>
+#endif
+
+#include <assert.h>
+
+#include <gio-unix-2.0/gio/gunixinputstream.h>
+#include <glib.h>
+
+#include <core/i18n.h>
+#include <core/string.h>
+#include <core/LogWriter.h>
+
+#include "Proxy.h"
+#include "Clipboard.h"
+
+struct PendingData {
+  uint32_t serial;
+  std::string mimeType;
+};
+
+struct ReadContext {
+  dbus::Clipboard* instance;
+  bool isAlive;
+};
+
+static const char* MIME_TEXT_PLAIN = "text/plain";
+static const char* MIME_TEXT_PLAIN_UTF8 = "text/plain;charset=utf-8";
+
+static const char* MIME_TYPES[] {
+  MIME_TEXT_PLAIN_UTF8,
+  MIME_TEXT_PLAIN,
+};
+
+static core::LogWriter vlog("Clipboard");
+
+using namespace dbus;
+
+Clipboard::Clipboard(const std::string& path,
+                     std::function<void(const char* data)> sendClipboardDataCb_,
+                     std::function<void(bool available)> clipboardAnnounceCb_,
+                     std::function<void()> clipboardRequestCb_)
+  : sendClipboardDataCb(sendClipboardDataCb_),
+    clipboardAnnounceCb(clipboardAnnounceCb_),
+    clipboardRequestCb(clipboardRequestCb_)
+{
+  proxy = new Proxy("org.freedesktop.RemoteDesktop1", path.c_str(),
+                    "org.freedesktop.RemoteDesktop1.Clipboard");
+  proxy->subscribe("SelectionTransfer",
+                   std::bind(&Clipboard::handleSelectionTransfer,
+                             this, std::placeholders::_1));
+  proxy->subscribe("SelectionOwnerChanged",
+                   std::bind(&Clipboard::handleSelectionOwnerChanged,
+                             this, std::placeholders::_1));
+}
+
+Clipboard::~Clipboard()
+{
+  if (proxy)
+    clearPendingSerials();
+
+  delete proxy;
+
+  if (readContext) {
+    readContext->isAlive = false;
+    g_cancellable_cancel(readCancellable);
+  }
+
+  if (readStream)
+    g_object_unref(readStream);
+  if (readCancellable)
+    g_object_unref(readCancellable);
+}
+
+void Clipboard::destroy()
+{
+  GVariant* result;
+
+  result = proxy->call("Destroy", nullptr);
+  g_variant_unref(result);
+}
+
+void Clipboard::selectionWrite(const char* data)
+{
+  while (!pendingSerials.empty()) {
+    PendingData pending;
+
+    pending = pendingSerials.front();
+    pendingSerials.pop();
+    selectionWrite(pending, data);
+  }
+}
+
+void Clipboard::setSelection()
+{
+  GVariantBuilder b;
+  GVariantBuilder mimesBuilder;
+  GVariant* params;
+
+  g_variant_builder_init(&mimesBuilder, G_VARIANT_TYPE("as"));
+  for (const auto& mime : MIME_TYPES)
+    g_variant_builder_add(&mimesBuilder, "s", mime);
+
+  g_variant_builder_init(&b, G_VARIANT_TYPE_VARDICT);
+  g_variant_builder_add(&b, "{sv}", "mime-types", g_variant_builder_end(&mimesBuilder));
+
+  params = g_variant_new("(a{sv})", &b);
+
+  try  {
+    proxy->call("SetSelection", params);
+  } catch (std::exception& e) {
+    vlog.error(_("Failed to update the clipboard: %s"), e.what());
+  }
+}
+
+void Clipboard::selectionWrite(PendingData pendingData, const char* data)
+{
+  GError* error = nullptr;
+  GUnixFDList* fdList = nullptr;
+  GVariant* params;
+  GVariant* response;
+  int32_t fdIndex;
+  int fd;
+  size_t remaining;
+  ssize_t written;
+  const char* buf;
+  std::string ascii;
+  uint32_t serial;
+  const char* mimeType;
+  GVariantBuilder b;
+
+  serial = pendingData.serial;
+  mimeType = pendingData.mimeType.c_str();
+
+  g_variant_builder_init(&b, G_VARIANT_TYPE_VARDICT);
+  params = g_variant_new("(ua{sv})", serial, &b);
+
+  response = proxy->callWithUnixFdList("SelectionWrite", params, nullptr, &fdList);
+
+  // FIXME: Get error from callWithUnixFdList, instead of throwing exception
+  if (error) {
+    vlog.error(_("Failed to update the clipboard: %s"), error->message);
+    g_variant_unref(response);
+    g_error_free(error);
+    selectionWriteDone(serial, false);
+    return;
+  }
+
+  g_variant_get(response, "(h)", &fdIndex);
+  g_variant_unref(response);
+
+  // FIXME: Can we always assume index 0?
+  fd = g_unix_fd_list_get(fdList, 0, &error);
+  g_object_unref(fdList);
+
+  if (error) {
+    vlog.error(_("Failed to update the clipboard: %s"), error->message);
+    g_error_free(error);
+    selectionWriteDone(serial, false);
+    return;
+  }
+
+  if (strcmp(mimeType, MIME_TEXT_PLAIN) == 0) {
+    ascii = core::utf8ToAscii(data, strlen(data));
+    buf = ascii.c_str();
+    remaining = ascii.size();
+  } else if (strcmp(mimeType, MIME_TEXT_PLAIN_UTF8) == 0) {
+    buf = data;
+    remaining = strlen(data);
+  } else {
+    vlog.error(_("Failed to update the clipboard: %s"),
+               core::format(_("Unsupported mime type '%s'"),
+                            mimeType).c_str());
+    selectionWriteDone(serial, false);
+    return;
+  }
+
+  while (remaining > 0) {
+    written = write(fd, buf, remaining);
+
+    if (written < 0) {
+      vlog.error(_("Failed to update the clipboard: %s"),
+                 strerror(errno));
+      selectionWriteDone(serial, false);
+      close(fd);
+      return;
+    }
+
+    remaining -= written;
+    buf += written;
+  }
+
+  if (close(fd) != 0) {
+    vlog.error(_("Failed to update the clipboard: %s"),
+               strerror(errno));
+    selectionWriteDone(serial, false);
+  } else {
+    selectionWriteDone(serial, true);
+  }
+}
+
+void Clipboard::clearSelection()
+{
+  GVariantBuilder b;
+  GVariant* params;
+
+  // Not sending 'mime_types' should make us no longer own the clipboard
+  g_variant_builder_init(&b, G_VARIANT_TYPE_VARDICT);
+  params = g_variant_new("(a{sv})", &b);
+
+  try {
+    proxy->call("SetSelection", params);
+  } catch (std::exception& e) {
+    vlog.error(_("Failed to release clipboard ownership: %s"),
+               e.what());
+  }
+
+  clearPendingSerials();
+  availableMimeTypes.clear();
+}
+
+void Clipboard::selectionWriteDone(uint32_t serial, bool success)
+{
+  GError* error = nullptr;
+  GVariant* params;
+  GVariant* result;
+  GVariantBuilder b;
+
+  g_variant_builder_init(&b, G_VARIANT_TYPE_VARDICT);
+  params = g_variant_new("(uba{sv})", serial, success, &b);
+
+  result = proxy->call("SelectionWriteDone", params);
+
+  if (error) {
+    vlog.error(_("Failed to update the clipboard: %s"), error->message);
+    g_error_free(error);
+    return;
+  }
+
+  g_variant_unref(result);
+}
+
+void Clipboard::selectionRead()
+{
+  GError* error = nullptr;
+  GUnixFDList* fdList = nullptr;
+  GVariant* response;
+  int32_t fdIndex;
+  int fd;
+  GVariant* params;
+  const char* mimeType;
+  GVariantBuilder b;
+
+  if (selectionOwner)
+    return;
+
+  if (readContext) {
+    // FIXME: Do we cancel our current read and read again?
+    return;
+  }
+
+  mimeType = nullptr;
+  for (uint i = 0; i < sizeof(MIME_TYPES) / sizeof(MIME_TYPES[0]); i++) {
+    if (availableMimeTypes.find(MIME_TYPES[i]) != availableMimeTypes.end()) {
+      mimeType = MIME_TYPES[i];
+      break;
+    }
+  }
+
+  if (!mimeType)
+    return;
+
+  assert(!selectionOwner);
+  assert(!readContext);
+  readContext = new ReadContext{this, true};
+  pendingReadMimeType = mimeType;
+
+  g_variant_builder_init(&b, G_VARIANT_TYPE_VARDICT);
+  params = g_variant_new("(sa{sv})", mimeType, &b);
+
+  response = proxy->callWithUnixFdList("SelectionRead", params, nullptr, &fdList);
+
+  if (error) {
+    vlog.error(_("Failed to retrieve the clipboard: %s"),
+               error->message);
+    g_error_free(error);
+    delete readContext;
+    readContext = nullptr;
+    return;
+  }
+
+  if (!g_variant_is_of_type(response, G_VARIANT_TYPE("(h)"))) {
+    g_object_unref(fdList);
+    vlog.debug("Unexpected variant type: %s",
+               g_variant_get_type_string(response));
+    vlog.error(_("Invalid response to request \"%s\""),
+               "SelectionRead");
+    delete readContext;
+    readContext = nullptr;
+    g_variant_unref(response);
+    return;
+  }
+
+  g_variant_get(response, "(h)", &fdIndex);
+  g_variant_unref(response);
+
+  fd = g_unix_fd_list_get(fdList, fdIndex, &error);
+  g_object_unref(fdList);
+
+  if (error || fd == -1) {
+    delete readContext;
+    readContext = nullptr;
+    vlog.error(_("Failed to retrieve the clipboard: %s"),
+               error->message);
+    g_error_free(error);
+    return;
+  }
+
+  readCancellable = g_cancellable_new();
+  readStream = g_unix_input_stream_new(fd, true);
+  readBuffer.clear();
+
+  g_input_stream_read_bytes_async(
+    readStream,
+    4096,
+    G_PRIORITY_DEFAULT,
+    readCancellable,
+    [](GObject*, GAsyncResult* result, void* userData) {
+      ReadContext* ctx = (ReadContext*)userData;
+      if (ctx->isAlive)
+        ctx->instance->handleReadDataCallback(result);
+      else
+        delete ctx;
+    },
+    readContext);
+}
+
+void Clipboard::handleSelectionTransfer(GVariant* parameters)
+{
+  uint32_t serial;
+  char* mimeType;
+  GVariant* options; // Unused
+  bool validMimeType;
+
+  g_variant_get(parameters, "(su@a{sv})", &mimeType, &serial, &options);
+
+  char* debug = g_variant_print(parameters, true);
+  g_free(debug);
+  g_variant_unref(options);
+
+
+  validMimeType = false;
+  for (uint i = 0; i < sizeof(MIME_TYPES) / sizeof(MIME_TYPES[0]); i++) {
+    if (strcmp(mimeType, MIME_TYPES[i]) == 0) {
+      validMimeType = true;
+      break;
+    }
+  }
+
+  if (!validMimeType) {
+    vlog.error(_("Unsupported mime type '%s'"), mimeType);
+    selectionWriteDone(serial, false);
+    free(mimeType);
+    return;
+  }
+
+
+  pendingSerials.push({serial, mimeType});
+  clipboardRequestCb();
+
+  free(mimeType);
+}
+
+void Clipboard::handleSelectionOwnerChanged(GVariant* parameters)
+{
+  GVariant* options;
+  GVariant* mimeTypes;
+  GVariant* sessionIsOwner;
+  char** mimeTypeArray;
+
+  g_variant_get(parameters, "(@a{sv})", &options);
+
+  mimeTypes = g_variant_lookup_value(options, "mime-types", G_VARIANT_TYPE_STRING_ARRAY);
+  sessionIsOwner = g_variant_lookup_value(options, "session-is-owner",
+                                          G_VARIANT_TYPE_BOOLEAN);
+  g_variant_unref(options);
+
+  if (!sessionIsOwner) {
+    delete readContext;
+    readContext = nullptr;
+    availableMimeTypes.clear();
+    clipboardAnnounceCb(false);
+    clearPendingSerials();
+
+    if (mimeTypes)
+      g_variant_unref(mimeTypes);
+
+    return;
+  }
+
+  selectionOwner = g_variant_get_boolean(sessionIsOwner);
+  g_variant_unref(sessionIsOwner);
+
+  if (selectionOwner) {
+    availableMimeTypes.clear();
+    clipboardAnnounceCb(false);
+    clearPendingSerials();
+
+    if (mimeTypes)
+      g_variant_unref(mimeTypes);
+
+    return;
+  }
+
+  if (!mimeTypes) {
+    availableMimeTypes.clear();
+    clipboardAnnounceCb(false);
+    clearPendingSerials();
+    return;
+  }
+
+  if (!g_variant_is_of_type(mimeTypes, G_VARIANT_TYPE("as"))) {
+    char* mimeTypeString;
+
+    mimeTypeString = g_variant_print(mimeTypes, true);
+    vlog.error(_("Invalid response to request \"%s\""),
+               "SelectionOwnerChanged");
+    free(mimeTypeString);
+    g_variant_unref(mimeTypes);
+    clipboardAnnounceCb(false);
+    clearPendingSerials();
+    return;
+  }
+
+  g_variant_get(mimeTypes, "^as", &mimeTypeArray);
+
+  for (int i = 0; mimeTypeArray[i] != nullptr; i++) {
+    for (uint j = 0; j < sizeof(MIME_TYPES) / sizeof(MIME_TYPES[0]); j++) {
+      if (strcmp(mimeTypeArray[i], MIME_TYPES[j]) == 0) {
+        availableMimeTypes.insert(mimeTypeArray[i]);
+      }
+    }
+  }
+
+  clipboardAnnounceCb(true);
+  g_strfreev(mimeTypeArray);
+  g_variant_unref(mimeTypes);
+}
+
+// FIXME: This is identical to the Portal's
+//        Clipboard::handleReadDataCallback(). Keep in sync
+void Clipboard::handleReadDataCallback(GAsyncResult* res)
+{
+  GError* error = nullptr;
+  GBytes* bytes;
+  size_t bytesRead;
+  size_t dataSize;
+  const char* data;
+
+  bytes = g_input_stream_read_bytes_finish(readStream, res, &error);
+
+  if (error) {
+    if (error->code == G_IO_ERROR_CANCELLED)
+      vlog.error(_("Failed to retrieve the clipboard: %s"),
+                 _("Cancelled"));
+    else
+      vlog.error(_("Failed to retrieve the clipboard: %s"),
+                 error->message);
+
+    g_error_free(error);
+    g_object_unref(readStream);
+    g_object_unref(readCancellable);
+    readStream = nullptr;
+    readCancellable = nullptr;
+    delete readContext;
+    readContext = nullptr;
+    return;
+  }
+
+  bytesRead = g_bytes_get_size(bytes);
+
+  // Zero is returned on EOF, we are finished reading
+  if (bytesRead == 0) {
+    g_object_unref(readStream);
+    g_object_unref(readCancellable);
+    readStream = nullptr;
+    readCancellable = nullptr;
+    g_bytes_unref(bytes);
+
+    if (strcmp(pendingReadMimeType, MIME_TEXT_PLAIN) == 0) {
+      if (!core::isValidAscii(readBuffer.c_str(), readBuffer.size())) {
+        vlog.error(_("Non-ASCII character in clipboard"));
+        readBuffer.clear();
+        delete readContext;
+        readContext = nullptr;
+        return;
+      }
+    } else if (strcmp(pendingReadMimeType, MIME_TEXT_PLAIN_UTF8) == 0) {
+      if (!core::isValidUTF8(readBuffer.c_str(), readBuffer.size())) {
+        vlog.error(_("Non-ASCII character in clipboard"));
+        readBuffer.clear();
+        delete readContext;
+        readContext = nullptr;
+        return;
+      }
+    }
+
+    sendClipboardDataCb(readBuffer.c_str());
+    readBuffer.clear();
+    delete readContext;
+    readContext = nullptr;
+    return;
+  }
+
+  data = (const char*)g_bytes_get_data(bytes, &dataSize);
+
+  readBuffer.append(data, dataSize);
+  g_bytes_unref(bytes);
+
+  // While bytesRead > 0, continue reading until we reach EOF
+  g_input_stream_read_bytes_async(
+    readStream, 4096, G_PRIORITY_DEFAULT, readCancellable,
+    [](GObject*, GAsyncResult* result, void* userData) {
+      ReadContext* ctx = (ReadContext*)userData;
+      if (ctx->isAlive)
+        ctx->instance->handleReadDataCallback(result);
+      else
+        delete ctx;
+    }, readContext);
+}
+
+void Clipboard::clearPendingSerials()
+{
+  while (!pendingSerials.empty()) {
+    PendingData pending;
+
+    pending = pendingSerials.front();
+    pendingSerials.pop();
+    selectionWriteDone(pending.serial, false);
+  }
+}

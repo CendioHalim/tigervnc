@@ -40,6 +40,7 @@ add_executable(w0vncserver
 )
 
 add_executable(rd1-vncserver
+  dbus/Clipboard.cxx
   dbus/NameWatcher.cxx
   dbus/Proxy.cxx
   dbus/RemoteDesktopManager.cxx

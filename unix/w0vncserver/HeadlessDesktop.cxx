@@ -33,6 +33,7 @@
 
 #include <rfb/VNCServer.h>
 
+#include "dbus/Clipboard.h"
 #include "dbus/VirtualMonitor.h"
 #include "dbus/RemoteDesktopManager.h"
 #include "dbus/RemoteDesktopSession.h"
@@ -46,7 +47,8 @@ static core::LogWriter vlog("HeadlessDesktop");
 
 HeadlessDesktop::HeadlessDesktop()
   : server(nullptr), manager(nullptr), session(nullptr),
-    monitor(nullptr), pb(nullptr), eisClient(nullptr), oldButtonMask(0)
+    monitor(nullptr), clipboard(nullptr), pb(nullptr),
+    eisClient(nullptr), oldButtonMask(0)
 {
 }
 
@@ -55,6 +57,7 @@ HeadlessDesktop::~HeadlessDesktop()
   delete pb;
 
   // FIXME: Wait until org.freedesktop.RemoteDesktop1.Session::Removed signal...
+  delete clipboard;
   delete monitor;
   delete session;
   delete manager;
@@ -69,6 +72,7 @@ void HeadlessDesktop::start()
 {
   std::string sessionPath;
   std::string monitorPath;
+  std::string clipboardPath;
   int eisFd;
   dbus::PipeWireInfo pwInfo;
 
@@ -87,6 +91,22 @@ void HeadlessDesktop::start()
       server->setLEDState(state);
     });
 
+  std::function<void(const char*)> sendClipboardData = [this](const char* data) {
+    server->sendClipboardData(data);
+  };
+
+  std::function<void(bool available)> clipboardAnnounceCb = [this](bool available) {
+    server->announceClipboard(available);
+  };
+
+  std::function<void()> clipboardRequestCb = [this]() {
+    server->requestClipboard();
+  };
+
+  clipboardPath = session->enableClipboard();
+  clipboard = new dbus::Clipboard(clipboardPath, sendClipboardData,
+                                  clipboardAnnounceCb, clipboardRequestCb);
+
   pwInfo = monitor->openPipeWireStream();
 
   pb = new PipeWirePixelBuffer(pwInfo.nodeId, pwInfo.serial, server);
@@ -98,6 +118,9 @@ void HeadlessDesktop::stop()
 
   delete pb;
   pb = nullptr;
+
+  delete clipboard;
+  clipboard = nullptr;
 
   delete eisClient;
   eisClient = nullptr;
@@ -157,6 +180,35 @@ void HeadlessDesktop::pointerEvent(const core::Point& pos,
   }
 
   oldButtonMask = buttonMask;
+}
+
+void HeadlessDesktop::handleClipboardRequest()
+{
+  if (!clipboard)
+    return;
+
+  assert(clipboard);
+
+  clipboard->selectionRead();
+}
+
+void HeadlessDesktop::handleClipboardAnnounce(bool available)
+{
+  if (!clipboard)
+    return;
+
+  if (available)
+    clipboard->setSelection();
+  else
+    clipboard->clearSelection();
+}
+
+void HeadlessDesktop::handleClipboardData(const char* data)
+{
+  if (!clipboard)
+    return;
+
+  clipboard->selectionWrite(data);
 }
 
 bool HeadlessDesktop::available()

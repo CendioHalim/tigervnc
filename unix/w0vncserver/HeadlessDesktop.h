@@ -25,6 +25,7 @@ namespace dbus {
   class RemoteDesktopManager;
   class RemoteDesktopSession;
   class VirtualMonitor;
+  class Clipboard;
 }
 
 namespace rfb {
@@ -49,6 +50,9 @@ public:
                                const rfb::ScreenSet& layout) override;
   void keyEvent(uint32_t keysym, uint32_t keycode, bool down) override;
   void pointerEvent(const core::Point& pos, uint16_t buttonMask) override;
+  void handleClipboardRequest() override;
+  void handleClipboardAnnounce(bool available) override;
+  void handleClipboardData(const char* data) override;
 
   static bool available();
 
@@ -57,6 +61,7 @@ protected:
   dbus::RemoteDesktopManager* manager;
   dbus::RemoteDesktopSession* session;
   dbus::VirtualMonitor* monitor;
+  dbus::Clipboard* clipboard;
   PipeWirePixelBuffer* pb;
   EISClient* eisClient;
   uint16_t oldButtonMask;
