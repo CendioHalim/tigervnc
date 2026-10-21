@@ -73,6 +73,14 @@ PipeWireInfo VirtualMonitor::openPipeWireStream(uint32_t cursorMode)
   g_variant_lookup(info, "node-id", "u", &pw.nodeId);
   g_variant_lookup(info, "serial", "t", &pw.serial);
 
+  // FIXME: Debug prints, remove later
+  char* infoStr;
+  infoStr = g_variant_print(info, true);
+  vlog.debug("OpenPipeWireStream: stream %s, info %s", pw.streamId.c_str(), infoStr);
+  g_free(infoStr);
+
+  vlog.debug("node-id: %u, serial:  %lu", pw.nodeId , pw.serial);
+
   g_variant_unref(info);
   g_variant_unref(result);
 
