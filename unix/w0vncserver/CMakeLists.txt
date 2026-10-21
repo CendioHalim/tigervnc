@@ -48,11 +48,16 @@ add_executable(rd1-vncserver
   pipewire/PipeWirePixelBuffer.cxx
   pipewire/PipeWireSource.cxx
   pipewire/PipeWireStream.cxx
+  qnum_to_xorgevdev.c
   remotedesktop1.cxx
+  xkb_to_qnum.c
   parameters.cxx
+  EISClient.cxx
   GSocketSource.cxx
+  GEISSource.cxx
   HeadlessDesktop.cxx
   RFBTimerSource.cxx
+  XkbKeyboard.cxx
 )
 
 add_executable(w0vncserver-forget
@@ -118,6 +123,8 @@ target_include_directories(rd1-vncserver SYSTEM PUBLIC ${GIO_INCLUDE_DIRS})
 target_include_directories(rd1-vncserver SYSTEM PUBLIC ${GOBJECT_INCLUDE_DIRS})
 target_include_directories(rd1-vncserver SYSTEM PUBLIC ${PIXMAN_INCLUDE_DIRS})
 target_include_directories(rd1-vncserver SYSTEM PUBLIC ${PIPEWIRE_INCLUDE_DIRS})
+target_include_directories(rd1-vncserver SYSTEM PUBLIC ${XKBCOMMON_INCLUDE_DIRS})
+target_include_directories(rd1-vncserver SYSTEM PUBLIC ${LIBEI_INCLUDE_DIRS})
 
 target_link_libraries(rd1-vncserver rfbserver rfb network rdr core)
 target_link_libraries(rd1-vncserver ${GLIB_LIBRARIES})
@@ -125,6 +132,8 @@ target_link_libraries(rd1-vncserver ${GIO_LIBRARIES})
 target_link_libraries(rd1-vncserver ${GOBJECT_LIBRARIES})
 target_link_libraries(rd1-vncserver ${PIXMAN_LIBRARIES})
 target_link_libraries(rd1-vncserver ${PIPEWIRE_LIBRARIES})
+target_link_libraries(rd1-vncserver ${XKBCOMMON_LIBRARIES})
+target_link_libraries(rd1-vncserver ${LIBEI_LIBRARIES})
 
 target_link_libraries(w0vncserver-forget PRIVATE core)
 

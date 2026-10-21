@@ -37,13 +37,16 @@
 #include "dbus/RemoteDesktopManager.h"
 #include "dbus/RemoteDesktopSession.h"
 #include "pipewire/PipeWirePixelBuffer.h"
+#include "EISClient.h"
 #include "HeadlessDesktop.h"
+
+#define BUTTONS 9
 
 static core::LogWriter vlog("HeadlessDesktop");
 
 HeadlessDesktop::HeadlessDesktop()
   : server(nullptr), manager(nullptr), session(nullptr),
-    monitor(nullptr), pb(nullptr)
+    monitor(nullptr), pb(nullptr), eisClient(nullptr), oldButtonMask(0)
 {
 }
 
@@ -66,6 +69,7 @@ void HeadlessDesktop::start()
 {
   std::string sessionPath;
   std::string monitorPath;
+  int eisFd;
   dbus::PipeWireInfo pwInfo;
 
   manager = new dbus::RemoteDesktopManager();
@@ -74,6 +78,14 @@ void HeadlessDesktop::start()
   monitorPath = session->createVirtualMonitor("VNC-0");
   // FIXME: Handle multiple monitors
   monitor = new dbus::VirtualMonitor(monitorPath);
+
+  eisFd = session->connectToEIS();
+  if (!eisFd)
+      vlog.error("Failed to get EIS FD, input disabled.");
+  else
+    eisClient = new EISClient(eisFd, [this](unsigned int state) {
+      server->setLEDState(state);
+    });
 
   pwInfo = monitor->openPipeWireStream();
 
@@ -86,6 +98,9 @@ void HeadlessDesktop::stop()
 
   delete pb;
   pb = nullptr;
+
+  delete eisClient;
+  eisClient = nullptr;
 
   delete monitor;
   monitor = nullptr;
@@ -110,6 +125,38 @@ unsigned int HeadlessDesktop::setScreenLayout(int /* fb_width */,
                                               const rfb::ScreenSet& /*  layout */)
 {
   return rfb::resultProhibited;
+}
+
+void HeadlessDesktop::keyEvent(uint32_t keysym, uint32_t keycode,
+                               bool down)
+{
+  if (!eisClient)
+    return;
+
+  eisClient->keyboardKey(keysym, keycode, down);
+}
+
+void HeadlessDesktop::pointerEvent(const core::Point& pos,
+                                   uint16_t buttonMask)
+{
+  if (!eisClient)
+    return;
+
+  eisClient->pointerMotionAbsolute(pos.x, pos.y);
+
+  if (buttonMask == oldButtonMask)
+    return;
+
+  for (int32_t i = 0; i < BUTTONS; i++) {
+    if ((buttonMask ^ oldButtonMask) & (1 << i)) {
+      if (i > 2 && i < 7)
+        eisClient->pointerScroll(i);
+      else
+        eisClient->pointerButton(i, buttonMask & (1 << i));
+    }
+  }
+
+  oldButtonMask = buttonMask;
 }
 
 bool HeadlessDesktop::available()

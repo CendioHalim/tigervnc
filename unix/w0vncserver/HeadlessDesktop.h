@@ -32,6 +32,7 @@ namespace rfb {
 }
 
 class PipeWirePixelBuffer;
+class EISClient;
 
 class HeadlessDesktop : public rfb::SDesktop {
 public:
@@ -46,6 +47,8 @@ public:
   void terminate() override;
   unsigned int setScreenLayout(int fb_width, int fb_height,
                                const rfb::ScreenSet& layout) override;
+  void keyEvent(uint32_t keysym, uint32_t keycode, bool down) override;
+  void pointerEvent(const core::Point& pos, uint16_t buttonMask) override;
 
   static bool available();
 
@@ -55,6 +58,8 @@ protected:
   dbus::RemoteDesktopSession* session;
   dbus::VirtualMonitor* monitor;
   PipeWirePixelBuffer* pb;
+  EISClient* eisClient;
+  uint16_t oldButtonMask;
 };
 
 #endif // __REMOTE_DESKTOP_1_DESKTOP_H__

@@ -446,6 +446,9 @@ if(UNIX AND NOT APPLE)
       # wlroots specific
       find_package(WaylandClient)
       find_package(Xkbcommon)
+
+      # RemoteDesktop1 specific
+      find_package(Libei)
     else()
       find_package(GLib REQUIRED)
       find_package(Gio REQUIRED)
@@ -458,11 +461,15 @@ if(UNIX AND NOT APPLE)
       # wlroots specific
       find_package(WaylandClient REQUIRED)
       find_package(Xkbcommon REQUIRED)
+
+      # RemoteDesktop1 specific
+      find_package(Libei REQUIRED)
     endif()
     if(NOT GLIB_FOUND OR NOT GIO_FOUND OR NOT GOBJECT_FOUND OR NOT PIPEWIRE_FOUND
-       OR NOT UUID_FOUND OR NOT WAYLANDCLIENT_FOUND OR NOT XKBCOMMON_FOUND)
+       OR NOT UUID_FOUND OR NOT WAYLANDCLIENT_FOUND OR NOT XKBCOMMON_FOUND
+       OR NOT LIBEI_FOUND)
       set(ENABLE_WAYLAND 0)
-      message(WARNING "GLib, Gio, Gobject, PipeWire, Uuid, WaylandClient or Xkbcommon NOT found. w0vncserver disabled.")
+      message(WARNING "GLib, Gio, Gobject, PipeWire, Uuid, WaylandClient, Xkbcommon or Libei NOT found. w0vncserver disabled.")
     endif()
   endif()
 endif()
