@@ -227,7 +227,7 @@ void PipeWireStream::start(uint64_t serial)
   }
 }
 
-void PipeWireStream::handleStreamStateChanged(enum pw_stream_state old,
+void PipeWireStream::handleStreamStateChanged(enum pw_stream_state /*old*/,
                                               enum pw_stream_state state,
                                               const char* error)
 {
@@ -239,10 +239,8 @@ void PipeWireStream::handleStreamStateChanged(enum pw_stream_state old,
     vlog.debug("PipeWire stream disconnected");
     break;
   case PW_STREAM_STATE_PAUSED:
-    // This can happen if the compositor shuts down the session, e.g.
-    // a user logs out.
-    if (old == PW_STREAM_STATE_STREAMING)
-      stopped();
+    // FIXME: The stream seems to regularly be re-negotiated while the
+    // stream is active during startup. Not sure how to handle it properly.
     break;
   case PW_STREAM_STATE_ERROR:
     vlog.error(_("Error communicating with PipeWire: %s"), error);
