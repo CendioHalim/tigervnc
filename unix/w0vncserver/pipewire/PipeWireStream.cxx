@@ -227,17 +227,18 @@ void PipeWireStream::start(uint64_t serial)
   }
 }
 
-void PipeWireStream::handleStreamStateChanged(enum pw_stream_state /*old*/,
+void PipeWireStream::handleStreamStateChanged(enum pw_stream_state old,
                                               enum pw_stream_state state,
                                               const char* error)
 {
   if (!active)
     return;
 
+  vlog.debug("State changed from %s to %s",
+             pw_stream_state_as_string(old),
+             pw_stream_state_as_string(state));
+
   switch (state) {
-  case PW_STREAM_STATE_UNCONNECTED:
-    vlog.debug("PipeWire stream disconnected");
-    break;
   case PW_STREAM_STATE_PAUSED:
     // FIXME: The stream seems to regularly be re-negotiated while the
     // stream is active during startup. Not sure how to handle it properly.
@@ -247,7 +248,7 @@ void PipeWireStream::handleStreamStateChanged(enum pw_stream_state /*old*/,
     stopped();
     return;
   default:
-    vlog.debug("Unhandled stream state: %d", state);
+    vlog.debug("Unhandled stream state: %s", pw_stream_state_as_string(state));
     break;
   }
 }
